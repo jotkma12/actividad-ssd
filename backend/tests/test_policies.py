@@ -1,0 +1,146 @@
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from backend.politicas.validation import (
+    LOCAL_TIMEZONE,
+    ReservationPolicyError,
+    validate_reservation_interval,
+)
+from backend.politicas.approval import initial_reservation_status
+
+
+REQUESTED_AT = datetime(2030, 1, 6, 7, 0, tzinfo=LOCAL_TIMEZONE)
+
+
+def test_validates_five_hour_reservation_without_a_duration_cap():
+    starts_at = datetime(2030, 1, 7, 7, 0)
+    ends_at = datetime(2030, 1, 7, 12, 0)
+
+    normalized_start, normalized_end = validate_reservation_interval(
+        starts_at, ends_at, requested_at=REQUESTED_AT
+    )
+
+    assert normalized_start == datetime(2030, 1, 7, 12, 0, tzinfo=timezone.utc)
+    assert normalized_end == datetime(2030, 1, 7, 17, 0, tzinfo=timezone.utc)
+
+
+def test_accepts_full_allowed_day_without_a_duration_cap():
+    validate_reservation_interval(
+        datetime(2030, 1, 7, 7, 0),
+        datetime(2030, 1, 7, 21, 0),
+        requested_at=REQUESTED_AT,
+    )
+
+
+@pytest.mark.parametrize(
+    ("starts_at", "ends_at", "requested_at", "message"),
+    [
+        (
+            datetime(2030, 1, 7, 7, 0),
+            datetime(2030, 1, 7, 8, 0),
+            datetime(2030, 1, 6, 7, 1, tzinfo=LOCAL_TIMEZONE),
+            "24 horas",
+        ),
+        (
+            datetime(2030, 2, 6, 7, 0),
+            datetime(2030, 2, 6, 8, 0),
+            datetime(2030, 1, 6, 7, 0, tzinfo=LOCAL_TIMEZONE),
+            "30 días",
+        ),
+        (
+            datetime(2030, 1, 7, 6, 30),
+            datetime(2030, 1, 7, 7, 30),
+            REQUESTED_AT,
+            "07:00",
+        ),
+        (
+            datetime(2030, 1, 7, 20, 30),
+            datetime(2030, 1, 7, 21, 30),
+            REQUESTED_AT,
+            "21:00",
+        ),
+        (
+            datetime(2030, 1, 6, 8, 0),
+            datetime(2030, 1, 6, 9, 0),
+            datetime(2030, 1, 5, 8, 0, tzinfo=LOCAL_TIMEZONE),
+            "domingos",
+        ),
+        (
+            datetime(2030, 1, 7, 7, 0),
+            datetime(2030, 1, 8, 8, 0),
+            REQUESTED_AT,
+            "mismo día",
+        ),
+        (
+            datetime(2030, 1, 7, 7, 15),
+            datetime(2030, 1, 7, 8, 0),
+            REQUESTED_AT,
+            "bloque de 30 minutos",
+        ),
+        (
+            datetime(2030, 1, 7, 7, 0),
+            datetime(2030, 1, 7, 8, 15),
+            REQUESTED_AT,
+            "bloque de 30 minutos",
+        ),
+        (
+            datetime(2030, 1, 7, 8, 0),
+            datetime(2030, 1, 7, 7, 0),
+            REQUESTED_AT,
+            "anterior al fin",
+        ),
+    ],
+)
+def test_rejects_intervals_outside_confirmed_policies(
+    starts_at, ends_at, requested_at, message
+):
+    with pytest.raises(ReservationPolicyError, match=message):
+        validate_reservation_interval(
+            starts_at, ends_at, requested_at=requested_at
+        )
+
+
+def test_accepts_inclusive_advance_boundaries():
+    requested_at = datetime(2030, 1, 7, 12, 0, tzinfo=timezone.utc)
+    minimum_start = requested_at + timedelta(hours=24)
+    maximum_start = requested_at + timedelta(days=30)
+
+    # Pick the allowed boundary dates/times in local Bogota time.
+    validate_reservation_interval(
+        minimum_start.astimezone(LOCAL_TIMEZONE),
+        (minimum_start + timedelta(hours=1)).astimezone(LOCAL_TIMEZONE),
+        requested_at=requested_at,
+    )
+    validate_reservation_interval(
+        maximum_start.astimezone(LOCAL_TIMEZONE),
+        (maximum_start + timedelta(hours=1)).astimezone(LOCAL_TIMEZONE),
+        requested_at=requested_at,
+    )
+
+
+def test_aware_input_is_checked_in_bogota_and_returned_in_utc():
+    starts_at = datetime(2030, 1, 7, 12, 0, tzinfo=timezone.utc)
+    ends_at = datetime(2030, 1, 7, 17, 0, tzinfo=timezone.utc)
+
+    start_utc, end_utc = validate_reservation_interval(
+        starts_at, ends_at, requested_at=REQUESTED_AT
+    )
+
+    assert start_utc == starts_at
+    assert end_utc == ends_at
+
+
+@pytest.mark.parametrize(
+    ("requires_approval", "expected_status"),
+    [(True, "pending"), (False, "approved")],
+)
+def test_current_space_approval_setting_determines_new_reservation_status(
+    requires_approval, expected_status
+):
+    assert initial_reservation_status(requires_approval) == expected_status
+
+
+def test_initial_reservation_status_requires_a_configured_boolean():
+    with pytest.raises(TypeError, match="booleano"):
+        initial_reservation_status(None)

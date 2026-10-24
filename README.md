@@ -28,9 +28,13 @@ El comando solicita nombre completo, correo `@universidad.edu.co` y contraseña.
 
 ### Espacios académicos
 
-`GET /spaces` y `GET /spaces/{id}` consultan espacios activos e inactivos. Solo un administrador puede crearlos (`POST /spaces`), editar sus datos (`PUT /spaces/{id}`) o cambiar su estado (`PATCH /spaces/{id}/status`). Al desactivar un espacio, la respuesta indica cuántas reservas futuras pendientes o aprobadas debe revisar el administrador; no se cancelan automáticamente. Cada espacio requiere una configuración de aprobación al crearse.
+`GET /spaces` y `GET /spaces/{id}` consultan espacios activos e inactivos. Solo un administrador puede crearlos (`POST /spaces`), editar sus datos (`PUT /spaces/{id}`), cambiar su estado (`PATCH /spaces/{id}/status`) o cambiar si requieren aprobación (`PATCH /spaces/{id}/approval-policy`, con `requires_approval`). Al desactivar un espacio, la respuesta indica cuántas reservas futuras pendientes o aprobadas debe revisar el administrador; no se cancelan automáticamente. Cada espacio requiere una configuración de aprobación al crearse; cambiarla se registra en el historial y no altera reservas existentes. Las solicitudes nuevas consultan la configuración vigente: comienzan pendientes si requieren aprobación y aprobadas en caso contrario.
 
 Los bloqueos de mantenimiento se consultan en `GET /spaces/{id}/maintenance-blocks`; un administrador puede crearlos con `POST`, modificarlos con `PUT` y retirarlos con `DELETE` en esa misma ruta. Si el intervalo se cruza con una reserva pendiente o aprobada, la API rechaza la operación e identifica las reservas que deben resolverse; una modificación fallida conserva el bloqueo existente. Cuando resolver el conflicto requiere cancelar o cambiar una reserva, el administrador contacta manualmente al solicitante por un canal institucional, como una llamada o un mensaje. El sistema no envía correos automáticos ni integra servicios de notificación.
+
+### Políticas de reserva
+
+El validador compartido `backend.politicas.validation.validate_reservation_interval` interpreta horas sin zona como hora local de `America/Bogota`, valida bloques de 30 minutos, permite reservas de lunes a sábado entre las 07:00 y las 21:00 y exige entre 24 horas y 30 días de anticipación. No aplica un máximo independiente de duración. La cancelación por el solicitante de una reserva aprobada está permitida hasta dos horas antes del inicio, según la política documentada; su operación se implementará con el ciclo de reservas.
 
 ## Frontend
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define los límites temporales comunes a las reservas y la regla de aprobación de cada espacio. Los valores de esta primera versión convierten en criterios comprobables las reglas propuestas para el proyecto.
+Define los límites temporales confirmados para las reservas y la regla de aprobación de cada espacio. Los criterios no establecen un máximo independiente de duración.
 
 ## ADDED Requirements
 

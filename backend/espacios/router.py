@@ -12,6 +12,7 @@ from backend.espacios.schemas import (
     SpaceResponse,
     SpaceStatusResponse,
     SpaceStatusUpdate,
+    SpaceApprovalPolicyUpdate,
     SpaceUpdate,
 )
 from backend.espacios.service import (
@@ -21,6 +22,7 @@ from backend.espacios.service import (
     list_spaces,
     set_space_status,
     update_space,
+    set_space_approval_policy,
 )
 from backend.espacios.maintenance import (
     MaintenanceBlockNotFoundError,
@@ -99,6 +101,24 @@ def change_space_status(
     return SpaceStatusResponse(
         space=space, future_reservations_to_review=future_reservations
     )
+
+
+@router.patch("/{space_id}/approval-policy", response_model=SpaceResponse)
+def change_space_approval_policy(
+    space_id: int,
+    payload: SpaceApprovalPolicyUpdate,
+    principal: Annotated[Principal, Depends(require_administrator)],
+) -> SpaceResponse:
+    try:
+        return SpaceResponse(
+            **set_space_approval_policy(
+                actor_user_id=principal.user_id,
+                space_id=space_id,
+                requires_approval=payload.requires_approval,
+            )
+        )
+    except SpaceNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Espacio no encontrado") from None
 
 
 @router.get(

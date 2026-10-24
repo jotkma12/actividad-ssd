@@ -199,3 +199,41 @@ def set_space_status(
             (space_id,),
         ).fetchone()
         return _space_dict(updated), reservations_to_review
+
+
+def set_space_approval_policy(
+    *, actor_user_id: int, space_id: int, requires_approval: bool
+) -> dict:
+    """Update approval policy for future reservations without changing existing ones."""
+    with database_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute(
+            """SELECT id, name, type, capacity, location, equipment_json, is_active,
+                      requires_approval, created_at_utc
+               FROM spaces WHERE id = ?""",
+            (space_id,),
+        ).fetchone()
+        if row is None:
+            raise SpaceNotFoundError
+        current = _space_dict(row)
+        if current["requires_approval"] != requires_approval:
+            connection.execute(
+                "UPDATE spaces SET requires_approval = ? WHERE id = ?",
+                (int(requires_approval), space_id),
+            )
+            record_event(
+                connection,
+                actor_user_id=actor_user_id,
+                entity_type="space",
+                entity_id=space_id,
+                action="space_approval_policy_updated",
+                old_values={"requires_approval": current["requires_approval"]},
+                new_values={"requires_approval": requires_approval},
+            )
+        updated = connection.execute(
+            """SELECT id, name, type, capacity, location, equipment_json, is_active,
+                      requires_approval, created_at_utc
+               FROM spaces WHERE id = ?""",
+            (space_id,),
+        ).fetchone()
+        return _space_dict(updated)

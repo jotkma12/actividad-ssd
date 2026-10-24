@@ -35,6 +35,8 @@ Una espera agotada por contención debe producir un resultado claro y no guardar
 
 La interfaz y las reglas de negocio expresarán los horarios en `America/Bogota`; el almacenamiento seguirá la normalización UTC del plan. Los límites del calendario se aplicarán a la fecha local de inicio y fin y a la anticipación calculada desde el momento de la solicitud.
 
+Las reglas temporales confirmadas para esta versión son: solicitar con al menos 24 horas y hasta 30 días de anticipación; permitir reservas de lunes a sábado entre las 07:00 y las 21:00; y permitir que el solicitante cancele una reserva aprobada hasta dos horas antes de su inicio. No habrá un límite máximo independiente de duración; toda reserva deberá respetar el horario permitido y las demás políticas.
+
 ### Cuentas y permisos
 
 La configuración inicial del sistema permitirá crear un único primer administrador activo con nombre completo, correo terminado en `@universidad.edu.co` y contraseña válida. Solo estará disponible si todavía no existe un administrador; si ya existe uno, la configuración rechazará el intento y no creará otra cuenta inicial. El sistema no aprovisionará administradores iniciales automáticamente.
@@ -80,7 +82,6 @@ No hay una aplicación ni datos funcionales que migrar en esta etapa. Durante un
 
 ## Open Questions
 
-- ¿Se confirman los valores propuestos de anticipación (mínimo 24 horas y máximo 30 días), horario (lunes a sábado, 07:00–21:00) y cancelación aprobada (hasta 2 horas antes)? No se propone máximo de duración; el plan no determina los otros valores.
 - Cuando una solicitud pendiente llega a su hora de inicio o de fin sin decisión, ¿se cancela, se rechaza o permanece pendiente? El plan define el bloqueo temporal, pero no el vencimiento de una solicitud sin resolver.
 - Cuando se modifica una reserva aprobada en un espacio que requiere aprobación, ¿la reserva original continúa ocupando su horario mientras se decide el cambio, o se libera al enviar la modificación? ¿Qué intervalo ocupa la modificación y qué ocurre con la reserva si se rechaza el cambio?
 - Cuando se desactiva un espacio con reservas futuras, ¿qué canal manual y qué responsable se usarán para notificar a los solicitantes? El plan excluye avisos automáticos por correo y no define un canal alternativo.

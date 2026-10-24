@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from backend.database import database_connection
 from backend.espacios.service import InactiveSpaceError, require_active_space
 from backend.main import app
+from backend.politicas.approval import initial_reservation_status
 from backend.usuarios.service import create_initial_admin
 
 
@@ -249,6 +250,91 @@ def test_active_space_passes_bookability_guard(space_api):
     ).json()
 
     assert require_active_space(space["id"])["is_active"] is True
+
+
+def test_administrator_changes_approval_policy_without_changing_existing_reservations(space_api):
+    client, admin_headers = space_api
+    space = _create_space(client, admin_headers)
+    reservation_id = _insert_reservation(
+        space["id"], "pending", "2030-01-01T13:00:00.000000+00:00",
+        "2030-01-01T14:00:00.000000+00:00",
+    )
+
+    response = client.patch(
+        f"/spaces/{space['id']}/approval-policy",
+        headers=admin_headers,
+        json={"requires_approval": False},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["requires_approval"] is False
+    current_space = client.get(f"/spaces/{space['id']}").json()
+    assert current_space["requires_approval"] is False
+    assert initial_reservation_status(current_space["requires_approval"]) == "approved"
+    with database_connection() as connection:
+        reservation = connection.execute(
+            "SELECT status FROM reservations WHERE id = ?", (reservation_id,)
+        ).fetchone()
+        event = connection.execute(
+            """SELECT action, old_values_json, new_values_json FROM history_events
+               WHERE entity_type = 'space' AND entity_id = ?
+               ORDER BY id DESC LIMIT 1""",
+            (space["id"],),
+        ).fetchone()
+    assert reservation["status"] == "pending"
+    assert event["action"] == "space_approval_policy_updated"
+    assert json.loads(event["old_values_json"]) == {"requires_approval": True}
+    assert json.loads(event["new_values_json"]) == {"requires_approval": False}
+
+
+def test_non_administrator_cannot_change_approval_policy(space_api):
+    client, admin_headers = space_api
+    space = _create_space(client, admin_headers)
+    account = client.post(
+        "/users", headers=admin_headers,
+        json={"full_name": "Solicitante", "institutional_email": "solicitante@universidad.edu.co",
+              "identification": "SOL-POL", "password": "una-clave-larga", "role": "requester"},
+    ).json()
+    client.patch(f"/users/{account['id']}/status", headers=admin_headers, json={"is_active": True})
+    login = client.post("/auth/login", json={"institutional_email": "solicitante@universidad.edu.co", "password": "una-clave-larga"})
+    user_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    response = client.patch(
+        f"/spaces/{space['id']}/approval-policy", headers=user_headers,
+        json={"requires_approval": False},
+    )
+
+    assert response.status_code == 403
+    assert client.get(f"/spaces/{space['id']}").json()["requires_approval"] is True
+
+
+def test_approval_policy_requires_boolean_and_existing_space(space_api):
+    client, admin_headers = space_api
+    space = _create_space(client, admin_headers)
+
+    invalid = client.patch(
+        f"/spaces/{space['id']}/approval-policy", headers=admin_headers,
+        json={"requires_approval": "sometimes"},
+    )
+    missing = client.patch(
+        "/spaces/9999/approval-policy", headers=admin_headers,
+        json={"requires_approval": False},
+    )
+
+    assert invalid.status_code == 422
+    assert missing.status_code == 404
+    assert client.get(f"/spaces/{space['id']}").json()["requires_approval"] is True
+
+
+def test_space_cannot_be_created_without_approval_policy(space_api):
+    client, admin_headers = space_api
+    payload = _space_payload()
+    payload.pop("requires_approval")
+
+    response = client.post("/spaces", headers=admin_headers, json=payload)
+
+    assert response.status_code == 422
+    assert client.get("/spaces").json() == []
 
 
 def test_administrator_creates_maintenance_block_and_records_history(space_api):

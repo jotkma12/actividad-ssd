@@ -59,6 +59,10 @@ class SpaceStatusUpdate(BaseModel):
     is_active: bool
 
 
+class SpaceApprovalPolicyUpdate(BaseModel):
+    requires_approval: bool
+
+
 class SpaceResponse(BaseModel):
     id: int
     name: str

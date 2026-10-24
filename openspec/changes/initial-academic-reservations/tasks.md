@@ -21,10 +21,10 @@
 
 ## 4. Políticas (depende de espacios)
 
-- [ ] 4.1 Confirmar anticipación mínima y máxima, horario semanal y plazo de cancelación; verificar que las decisiones estén aprobadas y reflejadas en los requisitos, sin añadir un máximo de duración.
-- [ ] 4.2 Implementar bloques de 30 minutos, horario y anticipación en `America/Bogota`; verificar una reserva de más de cuatro horas dentro de la jornada y casos fuera de horario.
-- [ ] 4.3 Implementar configuración de aprobación por espacio; verificar que la regla sea obligatoria y que cambios afecten nuevas solicitudes sin cambiar reservas existentes.
-- [ ] 4.4 Agregar pruebas unitarias y documentación de políticas; verificar valores aprobados y que no exista máximo independiente de duración.
+- [x] 4.1 Confirmar anticipación mínima y máxima, horario semanal y plazo de cancelación; verificar que las decisiones estén aprobadas y reflejadas en los requisitos, sin añadir un máximo de duración.
+- [x] 4.2 Implementar bloques de 30 minutos, horario y anticipación en `America/Bogota`; verificar una reserva de más de cuatro horas dentro de la jornada y casos fuera de horario.
+- [x] 4.3 Implementar configuración de aprobación por espacio; verificar que la regla sea obligatoria y que cambios afecten nuevas solicitudes sin cambiar reservas existentes.
+- [x] 4.4 Agregar pruebas unitarias y documentación de políticas; verificar valores aprobados y que no exista máximo independiente de duración.
 
 ## 5. Modelo de reservas (depende de usuarios, permisos, espacios y políticas)
 
