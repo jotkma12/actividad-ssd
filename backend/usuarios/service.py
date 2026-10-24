@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import sqlite3
 
 from backend.database import database_connection
+from backend.historial.records import record_event
 from backend.usuarios.security import (
     create_bearer_token,
     hash_bearer_token,
@@ -40,6 +41,7 @@ def _user_dict(row: sqlite3.Row) -> dict:
 
 def create_account(
     *,
+    actor_user_id: int,
     full_name: str,
     institutional_email: str,
     identification: str,
@@ -78,6 +80,21 @@ def create_account(
             "is_active, created_at_utc FROM users WHERE id = ?",
             (cursor.lastrowid,),
         ).fetchone()
+        record_event(
+            connection,
+            actor_user_id=actor_user_id,
+            entity_type="user",
+            entity_id=cursor.lastrowid,
+            action="user_created",
+            old_values=None,
+            new_values={
+                "full_name": full_name,
+                "institutional_email": email,
+                "identification": identification,
+                "role": role,
+                "is_active": False,
+            },
+        )
         return _user_dict(row)
 
 
@@ -112,6 +129,20 @@ def create_initial_admin(*, full_name: str, institutional_email: str, password: 
             "is_active, created_at_utc FROM users WHERE id = ?",
             (cursor.lastrowid,),
         ).fetchone()
+        record_event(
+            connection,
+            actor_user_id=None,
+            entity_type="user",
+            entity_id=cursor.lastrowid,
+            action="initial_administrator_created",
+            old_values=None,
+            new_values={
+                "full_name": full_name,
+                "institutional_email": email,
+                "role": "administrator",
+                "is_active": True,
+            },
+        )
         return _user_dict(row)
 
 
@@ -166,19 +197,31 @@ def list_accounts() -> list[dict]:
         return [_user_dict(row) for row in rows]
 
 
-def set_account_status(user_id: int, is_active: bool) -> tuple[dict, int]:
+def set_account_status(
+    user_id: int, is_active: bool, *, actor_user_id: int
+) -> tuple[dict, int]:
     now = _utc_now()
     with database_connection() as connection:
         connection.execute("BEGIN IMMEDIATE")
         row = connection.execute(
-            "SELECT id FROM users WHERE id = ?", (user_id,)
+            "SELECT id, is_active FROM users WHERE id = ?", (user_id,)
         ).fetchone()
         if row is None:
             raise AccountNotFoundError
 
-        connection.execute(
-            "UPDATE users SET is_active = ? WHERE id = ?", (int(is_active), user_id)
-        )
+        if bool(row["is_active"]) != is_active:
+            connection.execute(
+                "UPDATE users SET is_active = ? WHERE id = ?", (int(is_active), user_id)
+            )
+            record_event(
+                connection,
+                actor_user_id=actor_user_id,
+                entity_type="user",
+                entity_id=user_id,
+                action="user_activated" if is_active else "user_deactivated",
+                old_values={"is_active": bool(row["is_active"])},
+                new_values={"is_active": is_active},
+            )
         if not is_active:
             connection.execute("DELETE FROM user_sessions WHERE user_id = ?", (user_id,))
 
@@ -199,14 +242,29 @@ def set_account_status(user_id: int, is_active: bool) -> tuple[dict, int]:
         return _user_dict(updated), future_reservations
 
 
-def set_account_role(user_id: int, role: str) -> dict:
+def set_account_role(user_id: int, role: str, *, actor_user_id: int) -> dict:
     with database_connection() as connection:
         connection.execute("BEGIN IMMEDIATE")
+        current = connection.execute(
+            "SELECT role FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if current is None:
+            raise AccountNotFoundError
         cursor = connection.execute(
             "UPDATE users SET role = ? WHERE id = ?", (role, user_id)
         )
         if cursor.rowcount == 0:
             raise AccountNotFoundError
+        if current["role"] != role:
+            record_event(
+                connection,
+                actor_user_id=actor_user_id,
+                entity_type="user",
+                entity_id=user_id,
+                action="user_role_changed",
+                old_values={"role": current["role"]},
+                new_values={"role": role},
+            )
         row = connection.execute(
             """SELECT id, full_name, institutional_email, identification, role,
                       is_active, created_at_utc FROM users WHERE id = ?""",
@@ -215,7 +273,9 @@ def set_account_role(user_id: int, role: str) -> dict:
         return _user_dict(row)
 
 
-def assign_approver(space_id: int, approver_user_id: int) -> None:
+def assign_approver(
+    space_id: int, approver_user_id: int, *, actor_user_id: int
+) -> None:
     with database_connection() as connection:
         connection.execute("BEGIN IMMEDIATE")
         space = connection.execute(
@@ -230,22 +290,44 @@ def assign_approver(space_id: int, approver_user_id: int) -> None:
             raise AccountNotFoundError("La cuenta no existe")
         if approver["role"] != "approver":
             raise ValueError("La cuenta debe tener el rol de aprobador")
-        connection.execute(
+        cursor = connection.execute(
             """INSERT INTO space_approvers (space_id, approver_user_id, assigned_at_utc)
                VALUES (?, ?, ?)
                ON CONFLICT (space_id, approver_user_id) DO NOTHING""",
             (space_id, approver_user_id, _utc_now()),
         )
+        if cursor.rowcount:
+            record_event(
+                connection,
+                actor_user_id=actor_user_id,
+                entity_type="space",
+                entity_id=space_id,
+                action="space_approver_assigned",
+                old_values=None,
+                new_values={"approver_user_id": approver_user_id},
+            )
 
 
-def remove_approver(space_id: int, approver_user_id: int) -> None:
+def remove_approver(
+    space_id: int, approver_user_id: int, *, actor_user_id: int
+) -> None:
     with database_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
         cursor = connection.execute(
             "DELETE FROM space_approvers WHERE space_id = ? AND approver_user_id = ?",
             (space_id, approver_user_id),
         )
         if cursor.rowcount == 0:
             raise AccountNotFoundError("La asignación no existe")
+        record_event(
+            connection,
+            actor_user_id=actor_user_id,
+            entity_type="space",
+            entity_id=space_id,
+            action="space_approver_removed",
+            old_values={"approver_user_id": approver_user_id},
+            new_values=None,
+        )
 
 
 def get_approver_space_ids(approver_user_id: int) -> set[int]:

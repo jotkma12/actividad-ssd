@@ -241,14 +241,6 @@ def test_account_activation_deactivation_blocks_session_and_preserves_reservatio
                          '2098-01-01T00:00:00+00:00')""",
             (user_id,),
         )
-        connection.execute(
-            """INSERT INTO history_events (
-                   actor_user_id, occurred_at_utc, entity_type, entity_id, action,
-                   old_values_json, new_values_json
-               ) VALUES (?, '2098-01-01T00:00:00+00:00', 'user', ?, 'account_activated',
-                         NULL, '{"is_active": true}')""",
-            (user_id, user_id),
-        )
 
     deactivation = client.patch(
         f"/users/{user_id}/status",
@@ -264,10 +256,15 @@ def test_account_activation_deactivation_blocks_session_and_preserves_reservatio
         assert connection.execute(
             "SELECT is_active FROM users WHERE id = ?", (user_id,)
         ).fetchone()[0] == 0
-        assert connection.execute(
-            "SELECT COUNT(*) FROM history_events WHERE entity_type = 'user' AND entity_id = ?",
-            (user_id,),
-        ).fetchone()[0] == 1
+        assert [
+            row[0]
+            for row in connection.execute(
+                """SELECT action FROM history_events
+                   WHERE entity_type = 'user' AND entity_id = ?
+                   ORDER BY occurred_at_utc, id""",
+                (user_id,),
+            )
+        ] == ["user_created", "user_activated", "user_deactivated"]
 
     reactivation = client.patch(
         f"/users/{user_id}/status",

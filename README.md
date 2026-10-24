@@ -44,6 +44,10 @@ Las reservas usan los estados `pending`, `approved`, `rejected`, `rejected_expir
 
 Un aprobador activo consulta `GET /approvals/pending` y recibe solo solicitudes pendientes de los espacios que tiene asignados. Para decidir, envía `POST /approvals/reservations/{id}/decision` con `{"decision":"approve"}` o `{"decision":"reject","reason":"..."}`. Solo el aprobador asignado puede decidir y no puede decidir una solicitud propia. El rechazo requiere motivo; la decisión actualiza el estado una sola vez dentro de una transacción SQLite y registra actor, acción y motivo en el historial. Las solicitudes pendientes vencen al llegar su hora de inicio y ya no admiten aprobación. Los cambios de reservas aprobadas se consultan en `GET /approvals/pending-changes` y se resuelven con `POST /approvals/change-requests/{id}/decision`; siguen las mismas restricciones de asignación y autoaprobación, y el rechazo requiere motivo.
 
+### Historial
+
+`GET /history` entrega eventos de auditoría en orden cronológico. Se puede filtrar con `entity_type` y `entity_id`. Un administrador puede consultar eventos de todas las entidades; un solicitante solo ve eventos de sus reservas; un aprobador ve eventos de reservas, espacios y mantenimientos dentro de los espacios que tiene asignados. Las operaciones de cuentas, roles y asignaciones, espacios, reservas, decisiones y mantenimientos registran actor, momento, acción, valores anteriores y nuevos y motivo cuando corresponde. El historial no tiene operaciones normales de edición o borrado.
+
 ### Disponibilidad
 
 Una persona con sesión activa puede consultar `GET /availability/spaces/{id}` con `starts_at` y `ends_at`. La respuesta distingue `available`, `occupied` y `blocked`. Solo las reservas pendientes o aprobadas ocupan el intervalo; los bloqueos por mantenimiento también lo bloquean. Los cruces usan intervalos semiabiertos: si una reserva o bloqueo termina justo cuando comienza el intervalo consultado, no hay cruce. Los bloqueos nuevos o modificados se rechazan si coinciden con reservas pendientes o aprobadas y el bloqueo anterior se conserva ante un cambio conflictivo.

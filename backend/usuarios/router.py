@@ -72,10 +72,14 @@ def logout(
 )
 def create_user(
     payload: AccountCreate,
-    _principal: Annotated[Principal, Depends(require_administrator)],
+    principal: Annotated[Principal, Depends(require_administrator)],
 ) -> UserResponse:
     try:
-        return UserResponse(**create_account(**payload.model_dump()))
+        return UserResponse(
+            **create_account(
+                actor_user_id=principal.user_id, **payload.model_dump()
+            )
+        )
     except AccountConflictError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from None
     except ValueError as error:
@@ -97,10 +101,12 @@ def get_users(
 def update_user_status(
     user_id: int,
     payload: AccountStatusUpdate,
-    _principal: Annotated[Principal, Depends(require_administrator)],
+    principal: Annotated[Principal, Depends(require_administrator)],
 ) -> AccountStatusResponse:
     try:
-        user, future_reservations = set_account_status(user_id, payload.is_active)
+        user, future_reservations = set_account_status(
+            user_id, payload.is_active, actor_user_id=principal.user_id
+        )
     except AccountNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cuenta no encontrada") from None
     return AccountStatusResponse(
@@ -112,10 +118,14 @@ def update_user_status(
 def update_user_role(
     user_id: int,
     payload: AccountRoleUpdate,
-    _principal: Annotated[Principal, Depends(require_administrator)],
+    principal: Annotated[Principal, Depends(require_administrator)],
 ) -> UserResponse:
     try:
-        return UserResponse(**set_account_role(user_id, payload.role))
+        return UserResponse(
+            **set_account_role(
+                user_id, payload.role, actor_user_id=principal.user_id
+            )
+        )
     except AccountNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cuenta no encontrada") from None
 
@@ -128,10 +138,10 @@ def update_user_role(
 def add_space_approver(
     space_id: int,
     user_id: int,
-    _principal: Annotated[Principal, Depends(require_administrator)],
+    principal: Annotated[Principal, Depends(require_administrator)],
 ) -> Response:
     try:
-        assign_approver(space_id, user_id)
+        assign_approver(space_id, user_id, actor_user_id=principal.user_id)
     except AccountNotFoundError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from None
     except ValueError as error:
@@ -147,10 +157,10 @@ def add_space_approver(
 def delete_space_approver(
     space_id: int,
     user_id: int,
-    _principal: Annotated[Principal, Depends(require_administrator)],
+    principal: Annotated[Principal, Depends(require_administrator)],
 ) -> Response:
     try:
-        remove_approver(space_id, user_id)
+        remove_approver(space_id, user_id, actor_user_id=principal.user_id)
     except AccountNotFoundError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from None
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -56,9 +56,9 @@
 
 ## 9. Historial (depende de usuarios y de las operaciones de cada módulo)
 
-- [ ] 9.1 Registrar actor, momento, acción y cambios para cuentas, roles, espacios, mantenimientos, reservas y decisiones; verificar eventos para operaciones correctas.
-- [ ] 9.2 Implementar consulta según permisos e impedir edición/borrado normal de eventos; verificar acceso del administrador, solicitante y aprobador según su alcance.
-- [ ] 9.3 Agregar pruebas de integración y documentación de historial; verificar motivos, orden cronológico y conservación tras desactivar cuentas.
+- [x] 9.1 Registrar actor, momento, acción y cambios para cuentas, roles, espacios, mantenimientos, reservas y decisiones; verificar eventos para operaciones correctas.
+- [x] 9.2 Implementar consulta según permisos e impedir edición/borrado normal de eventos; verificar acceso del administrador, solicitante y aprobador según su alcance.
+- [x] 9.3 Agregar pruebas de integración y documentación de historial; verificar motivos, orden cronológico y conservación tras desactivar cuentas.
 
 ## 10. Integración
 

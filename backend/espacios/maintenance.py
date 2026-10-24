@@ -137,6 +137,7 @@ def create_maintenance_block(
         )
         block_id = cursor.lastrowid
         new_values = {
+            "space_id": space_id,
             "starts_at_utc": starts_text,
             "ends_at_utc": ends_text,
             "reason": reason.strip(),
@@ -197,11 +198,13 @@ def update_maintenance_block(
             raise MaintenanceConflictError(conflicts)
 
         old_values = {
+            "space_id": space_id,
             "starts_at_utc": existing["starts_at_utc"],
             "ends_at_utc": existing["ends_at_utc"],
             "reason": existing["reason"],
         }
         new_values = {
+            "space_id": space_id,
             "starts_at_utc": starts_text,
             "ends_at_utc": ends_text,
             "reason": normalized_reason,
@@ -252,6 +255,7 @@ def delete_maintenance_block(
             entity_id=block_id,
             action="maintenance_block_deleted",
             old_values={
+                "space_id": space_id,
                 "starts_at_utc": existing["starts_at_utc"],
                 "ends_at_utc": existing["ends_at_utc"],
                 "reason": existing["reason"],

@@ -1,1 +1,1 @@
-"""Módulo de historial (implementación pendiente)."""
+"""Read-only audit history for domain operations."""
