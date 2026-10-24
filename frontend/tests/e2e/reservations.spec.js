@@ -15,11 +15,11 @@ async function signInRequester(page) {
   await expect(page.getByRole('heading', { name: 'Hola, Ana' })).toBeVisible();
 }
 
-async function searchAvailable(page, start, end, name = 'Sala disponible E2E') {
+async function searchAvailable(page, start, durationMinutes, name = 'Sala disponible E2E') {
   await page.getByRole('button', { name: 'Consultar disponibilidad' }).click();
   await page.getByLabel('Fecha de consulta').fill(bookingDate());
   await page.getByLabel('Hora de inicio').fill(start);
-  await page.getByLabel('Hora de fin').fill(end);
+  await page.getByLabel('Duración de la reserva').selectOption(String(durationMinutes));
   await page.getByRole('button', { name: 'Consultar disponibilidad' }).click();
   const spaces = await (await page.request.get('http://127.0.0.1:8000/spaces')).json();
   const target = spaces.find((space) => space.name === name);
@@ -35,14 +35,14 @@ test('rechaza el exceso del límite acumulado y conserva las reservas confirmada
   await expect(page.getByRole('heading', { name: 'Mis reservas' })).toBeVisible();
   const initialReservations = await page.locator('.reservation-card').count();
   await page.getByRole('button', { name: '← Volver al panel' }).click();
-  await searchAvailable(page, '14:00', '17:30', 'Sala límite E2E');
+  await searchAvailable(page, '14:00', 210, 'Sala límite E2E');
   await expect(page.getByRole('alert')).toContainText('no puede superar cuatro horas');
   await expect(page.locator('.reservation-card')).toHaveCount(initialReservations);
 });
 
 test('consulta, modifica y cancela una reserva propia conservando respuestas reales', async ({ page }) => {
   await signInRequester(page);
-  await searchAvailable(page, '16:00', '17:00');
+  await searchAvailable(page, '16:17', 30);
   await expect(page.getByRole('status')).toContainText('registrada con estado: Pendiente');
 
   const createdMessage = await page.getByRole('status').textContent();
@@ -50,8 +50,8 @@ test('consulta, modifica y cancela una reserva propia conservando respuestas rea
   const reservation = page.getByRole('article').filter({ hasText: `Reserva #${reservationId}` });
   await expect(reservation.getByText('Pendiente')).toBeVisible();
   await reservation.getByRole('button', { name: 'Modificar' }).click();
-  await page.getByLabel('Inicio').fill(`${bookingDate()}T17:00`);
-  await page.getByLabel('Fin').fill(`${bookingDate()}T18:00`);
+  await page.getByLabel('Inicio').fill(`${bookingDate()}T17:17`);
+  await page.getByLabel('Duración del cambio').selectOption('60');
   await page.getByRole('button', { name: 'Guardar cambio' }).click();
   await expect(page.getByRole('status')).toContainText('Reserva');
   await expect(page.getByRole('alert')).toHaveCount(0);

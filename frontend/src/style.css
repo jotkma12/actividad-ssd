@@ -199,7 +199,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .availability-search h2, .availability-results h2, .reservation-request-panel h2, .reservation-list-section h2 { margin: 0; color: #254b40; font-size: 1.3rem; }
 .availability-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-top: 18px; }
 .availability-form label, .reservation-edit-form label { display: grid; min-width: 150px; flex: 1 1 150px; gap: 6px; color: #526276; font-size: 0.82rem; font-weight: 650; }
-.availability-form input, .reservation-edit-form input { width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid #dce4e2; border-radius: 7px; color: #26394a; background: #fff; font: inherit; }
+.availability-form input, .availability-form select, .reservation-edit-form input, .reservation-edit-form select { width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid #dce4e2; border-radius: 7px; color: #26394a; background: #fff; font: inherit; }
+.selected-interval { align-self: center; margin: 0; color: #526276; font-size: .85rem; }
 .policy-hint { margin: 14px 0 0; color: #778394; font-size: 0.83rem; line-height: 1.55; }
 .table-scroll { overflow-x: auto; }
 .availability-results table { width: 100%; border-collapse: collapse; text-align: left; }

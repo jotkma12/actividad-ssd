@@ -195,6 +195,42 @@ def test_service_persists_and_queries_initial_state_from_space_policy(reservatio
     assert [row["id"] for row in own_rows] == [pending["id"]]
 
 
+def test_api_accepts_arbitrary_start_minute_and_rejects_duration_not_multiple_of_30(
+    reservation_api,
+):
+    api = reservation_api
+    starts_at, _, _ = _future_interval(days=8)
+    starts_at = starts_at.replace(hour=10, minute=17)
+    accepted = api["client"].post(
+        "/reservations",
+        headers=api["requester_headers"],
+        json={
+            "space_id": api["space"]["id"],
+            "starts_at": starts_at.isoformat(),
+            "ends_at": (starts_at + timedelta(minutes=30)).isoformat(),
+        },
+    )
+    assert accepted.status_code == 201
+    assert accepted.json()["starts_at_utc"] == starts_at.astimezone(
+        timezone.utc
+    ).isoformat(timespec="microseconds")
+    assert accepted.json()["ends_at_utc"] == (starts_at + timedelta(minutes=30)).astimezone(
+        timezone.utc
+    ).isoformat(timespec="microseconds")
+
+    rejected = api["client"].post(
+        "/reservations",
+        headers=api["requester_headers"],
+        json={
+            "space_id": api["space"]["id"],
+            "starts_at": (starts_at + timedelta(hours=1)).isoformat(),
+            "ends_at": (starts_at + timedelta(hours=1, minutes=45)).isoformat(),
+        },
+    )
+    assert rejected.status_code == 422
+    assert "múltiplo de 30 minutos" in rejected.json()["detail"]
+
+
 def test_creation_accumulates_pending_and_approved_reservations(reservation_api):
     api = reservation_api
     day_start, _, _ = _future_interval(days=10)
@@ -859,7 +895,9 @@ def test_approved_change_holds_both_intervals_until_approval(reservation_api):
         status="approved", starts_at=original_start.astimezone(timezone.utc),
         ends_at=original_end.astimezone(timezone.utc),
     )
-    proposed_start, proposed_end, _ = _future_interval(days=25)
+    proposed_start, _, _ = _future_interval(days=25)
+    proposed_start = proposed_start.replace(minute=17)
+    proposed_end = proposed_start + timedelta(minutes=30)
 
     response = api["client"].put(
         f"/reservations/{reservation_id}", headers=api["requester_headers"],

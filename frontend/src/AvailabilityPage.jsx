@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from './api/client.js';
+import { addDuration, formatDuration, RESERVATION_DURATIONS } from './reservationTime.js';
 
 const AVAILABILITY_LABELS = {
   available: 'Disponible',
@@ -11,12 +12,13 @@ export default function AvailabilityPage({ session, onBack, onRequest }) {
   const [spaces, setSpaces] = useState([]);
   const [date, setDate] = useState('');
   const [startsAt, setStartsAt] = useState('');
-  const [endsAt, setEndsAt] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState('30');
   const [results, setResults] = useState([]);
   const [loadingSpaces, setLoadingSpaces] = useState(true);
   const [checking, setChecking] = useState(false);
   const [queried, setQueried] = useState(false);
   const [error, setError] = useState('');
+  const end = addDuration(date, startsAt, durationMinutes);
 
   useEffect(() => {
     let active = true;
@@ -29,11 +31,17 @@ export default function AvailabilityPage({ session, onBack, onRequest }) {
 
   async function checkAvailability(event) {
     event.preventDefault();
+    if (!end || end.date !== date) {
+      setQueried(false);
+      setResults([]);
+      setError('La reserva debe terminar el mismo día que inicia.');
+      return;
+    }
     setChecking(true); setQueried(true); setError(''); setResults([]);
     const start = `${date}T${startsAt}:00`;
-    const end = `${date}T${endsAt}:00`;
+    const endDateTime = `${end.date}T${end.time}:00`;
     const checks = await Promise.all(spaces.map(async (space) => {
-      const params = new URLSearchParams({ starts_at: start, ends_at: end });
+      const params = new URLSearchParams({ starts_at: start, ends_at: endDateTime });
       try {
         const result = await apiRequest(`/availability/spaces/${space.id}?${params}`, { token: session.token });
         return { space, result, error: '' };
@@ -63,8 +71,9 @@ export default function AvailabilityPage({ session, onBack, onRequest }) {
         <h2 id="availability-search-title">Elige un intervalo</h2>
         <form className="availability-form" onSubmit={checkAvailability}>
           <label>Fecha<input aria-label="Fecha de consulta" required type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
-          <label>Desde<input aria-label="Hora de inicio" required type="time" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} /></label>
-          <label>Hasta<input aria-label="Hora de fin" required type="time" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} /></label>
+          <label>Hora de inicio<input aria-label="Hora de inicio" required step="60" type="time" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} /></label>
+          <label>Duración<select aria-label="Duración de la reserva" onChange={(event) => setDurationMinutes(event.target.value)} value={durationMinutes}>{RESERVATION_DURATIONS.map((minutes) => <option key={minutes} value={minutes}>{formatDuration(minutes)}</option>)}</select></label>
+          <p className="selected-interval" aria-live="polite">{end ? `Fin calculado: ${end.time}` : 'Elige la hora de inicio para calcular el fin.'}</p>
           <button className="primary-button" disabled={checking || loadingSpaces || spaces.length === 0} type="submit">
             {checking ? 'Consultando…' : 'Consultar disponibilidad'}
           </button>
@@ -83,7 +92,8 @@ export default function AvailabilityPage({ session, onBack, onRequest }) {
               : <span className={`status-pill ${result.availability === 'available' ? 'active' : 'inactive'}`}>{AVAILABILITY_LABELS[result.availability]}</span>}</td>
             <td>{session.user.role === 'requester' && !rowError && result.availability === 'available' && result.is_available
               ? <button className="text-button" onClick={() => onRequest({
-                spaceId: space.id, spaceName: space.name, date, startsAt, endsAt,
+                spaceId: space.id, spaceName: space.name, date, startsAt,
+                endsAt: end.time, durationMinutes: Number(durationMinutes),
               })} type="button">Solicitar reserva</button>
               : <span className="table-secondary">—</span>}</td>
           </tr>)}</tbody></table></div>

@@ -115,13 +115,9 @@ def validate_reservation_interval(
         raise ReservationPolicyError("La reserva no puede terminar después de las 21:00")
 
     for label, local_value in (("inicio", local_start), ("fin", local_end)):
-        if (
-            local_value.minute % BLOCK_MINUTES != 0
-            or local_value.second != 0
-            or local_value.microsecond != 0
-        ):
+        if local_value.second != 0 or local_value.microsecond != 0:
             raise ReservationPolicyError(
-                f"La hora de {label} debe coincidir con un bloque de 30 minutos"
+                f"La hora de {label} debe tener precisión de minuto"
             )
 
     if (end_utc - start_utc).total_seconds() % (BLOCK_MINUTES * 60) != 0:

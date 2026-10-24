@@ -103,16 +103,10 @@ def test_rejects_full_allowed_day_under_consecutive_limit():
             "mismo día",
         ),
         (
-            datetime(2030, 1, 7, 7, 15),
-            datetime(2030, 1, 7, 8, 0),
+            datetime(2030, 1, 7, 7, 17),
+            datetime(2030, 1, 7, 8, 2),
             REQUESTED_AT,
-            "bloque de 30 minutos",
-        ),
-        (
-            datetime(2030, 1, 7, 7, 0),
-            datetime(2030, 1, 7, 8, 15),
-            REQUESTED_AT,
-            "bloque de 30 minutos",
+            "múltiplo de 30 minutos",
         ),
         (
             datetime(2030, 1, 7, 8, 0),
@@ -147,6 +141,26 @@ def test_accepts_inclusive_advance_boundaries():
         (maximum_start + timedelta(hours=1)).astimezone(LOCAL_TIMEZONE),
         requested_at=requested_at,
     )
+
+
+def test_accepts_arbitrary_minute_start_with_thirty_minute_duration():
+    starts_at = datetime(2030, 1, 7, 10, 17)
+    ends_at = datetime(2030, 1, 7, 10, 47)
+
+    start_utc, end_utc = validate_reservation_interval(
+        starts_at, ends_at, requested_at=REQUESTED_AT
+    )
+
+    assert end_utc - start_utc == timedelta(minutes=30)
+
+
+def test_rejects_seconds_when_reservation_precision_is_minutes():
+    with pytest.raises(ReservationPolicyError, match="precisión de minuto"):
+        validate_reservation_interval(
+            datetime(2030, 1, 7, 10, 17, 1),
+            datetime(2030, 1, 7, 10, 47, 1),
+            requested_at=REQUESTED_AT,
+        )
 
 
 def test_aware_input_is_checked_in_bogota_and_returned_in_utc():

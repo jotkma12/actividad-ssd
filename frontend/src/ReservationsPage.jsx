@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from './api/client.js';
+import { addDuration, durationBetween, formatDuration, RESERVATION_DURATIONS } from './reservationTime.js';
 
 const STATUS_LABELS = {
   pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada',
@@ -44,7 +45,7 @@ export default function ReservationsPage({ session, initialDraft, onDraftConsume
   const [notice, setNotice] = useState('');
   const [draft, setDraft] = useState(initialDraft);
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ starts_at: '', ends_at: '' });
+  const [editForm, setEditForm] = useState({ starts_at: '', duration_minutes: '30' });
 
   async function refreshReservations() {
     const result = await apiRequest('/reservations', { token: session.token });
@@ -62,6 +63,11 @@ export default function ReservationsPage({ session, initialDraft, onDraftConsume
 
   async function submitRequest(event) {
     event.preventDefault(); if (!draft || !isRequester) return;
+    const end = addDuration(draft.date, draft.startsAt, draft.durationMinutes);
+    if (!end || end.date !== draft.date) {
+      setError('La reserva debe terminar el mismo día que inicia. Ajusta la hora o la duración.');
+      return;
+    }
     setBusy(true); setError(''); setNotice('');
     try {
       const created = await apiRequest('/reservations', {
@@ -69,7 +75,7 @@ export default function ReservationsPage({ session, initialDraft, onDraftConsume
         body: {
           space_id: draft.spaceId,
           starts_at: draftDateTime(draft.date, draft.startsAt),
-          ends_at: draftDateTime(draft.date, draft.endsAt),
+          ends_at: draftDateTime(end.date, end.time),
         },
       });
       await refreshReservations();
@@ -80,11 +86,18 @@ export default function ReservationsPage({ session, initialDraft, onDraftConsume
   }
 
   async function saveChange(event) {
-    event.preventDefault(); setBusy(true); setError(''); setNotice('');
+    event.preventDefault();
+    const [date, time] = editForm.starts_at.split('T');
+    const end = addDuration(date, time, editForm.duration_minutes);
+    if (!end || end.date !== date) {
+      setError('La reserva debe terminar el mismo día que inicia. Ajusta la hora o la duración.');
+      return;
+    }
+    setBusy(true); setError(''); setNotice('');
     try {
       const updated = await apiRequest(`/reservations/${editingId}`, {
         token: session.token, method: 'PUT',
-        body: { starts_at: `${editForm.starts_at}:00`, ends_at: `${editForm.ends_at}:00` },
+        body: { starts_at: `${editForm.starts_at}:00`, ends_at: draftDateTime(end.date, end.time) },
       });
       await refreshReservations(); setEditingId(null);
       setNotice(updated.pending_change
@@ -109,7 +122,10 @@ export default function ReservationsPage({ session, initialDraft, onDraftConsume
 
   function beginEdit(reservation) {
     setEditingId(reservation.id);
-    setEditForm({ starts_at: bogotaDateTime(reservation.starts_at_utc), ends_at: bogotaDateTime(reservation.ends_at_utc) });
+    setEditForm({
+      starts_at: bogotaDateTime(reservation.starts_at_utc),
+      duration_minutes: String(durationBetween(reservation.starts_at_utc, reservation.ends_at_utc)),
+    });
     setError(''); setNotice('');
   }
 
@@ -123,7 +139,7 @@ export default function ReservationsPage({ session, initialDraft, onDraftConsume
 
       {draft && isRequester && <section className="reservation-request-panel" aria-labelledby="reservation-request-title">
         <div className="section-heading"><div><p className="eyebrow">Intervalo confirmado disponible</p><h2 id="reservation-request-title">Solicitar reserva</h2></div></div>
-        <p><strong>{draft.spaceName}</strong> · {draft.date} · {draft.startsAt}–{draft.endsAt}</p>
+        <p><strong>{draft.spaceName}</strong> · {draft.date} · {draft.startsAt}–{draft.endsAt} ({draft.durationMinutes} minutos)</p>
         <p className="policy-hint">La disponibilidad se vuelve a validar al guardar. El servicio aplicará el horario, anticipación y límite acumulado de cuatro horas.</p>
         <form onSubmit={submitRequest} className="form-actions">
           <button className="primary-button" disabled={busy} type="submit">{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
@@ -139,8 +155,8 @@ export default function ReservationsPage({ session, initialDraft, onDraftConsume
           : <div className="reservation-card-list">{reservations.map((reservation) => <article className="reservation-card" key={reservation.id}>
             {editingId === reservation.id ? <form className="reservation-edit-form" onSubmit={saveChange}>
               <h3>Modificar reserva · {reservation.space_name}</h3>
-              <label>Inicio<input required type="datetime-local" value={editForm.starts_at} onChange={(event) => setEditForm({ ...editForm, starts_at: event.target.value })} /></label>
-              <label>Fin<input required type="datetime-local" value={editForm.ends_at} onChange={(event) => setEditForm({ ...editForm, ends_at: event.target.value })} /></label>
+              <label>Inicio<input required step="60" type="datetime-local" value={editForm.starts_at} onChange={(event) => setEditForm({ ...editForm, starts_at: event.target.value })} /></label>
+              <label>Duración<select aria-label="Duración del cambio" onChange={(event) => setEditForm({ ...editForm, duration_minutes: event.target.value })} value={editForm.duration_minutes}>{RESERVATION_DURATIONS.map((minutes) => <option key={minutes} value={minutes}>{formatDuration(minutes)}</option>)}</select></label>
               <div className="form-actions"><button className="primary-button" disabled={busy} type="submit">Guardar cambio</button>
                 <button className="secondary-button" disabled={busy} onClick={() => setEditingId(null)} type="button">Cancelar edición</button></div>
             </form> : <>
