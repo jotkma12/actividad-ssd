@@ -472,6 +472,7 @@ def cancel_reservation(
                 action="reservation_cancelled",
                 old_values={"status": current},
                 new_values={"status": "cancelled", "cancellation_reason": clean_reason},
+                reason=clean_reason,
             )
             cancelled_result = get_reservation_record(connection, reservation_id)
 

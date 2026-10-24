@@ -62,5 +62,5 @@
 
 ## 10. Integración
 
-- [ ] 10.1 Ejecutar recorridos completos de cuenta, espacio, solicitud, disponibilidad, aprobación/rechazo, cancelación e historial; verificar los escenarios acordados.
-- [ ] 10.2 Actualizar trazabilidad requisito-prueba y revisar documentación del sistema; verificar que ningún requisito implementado quede sin prueba asociada.
+- [x] 10.1 Ejecutar recorridos completos de cuenta, espacio, solicitud, disponibilidad, aprobación/rechazo, cancelación e historial; verificar los escenarios acordados.
+- [x] 10.2 Actualizar trazabilidad requisito-prueba y revisar documentación del sistema; verificar que ningún requisito implementado quede sin prueba asociada.
