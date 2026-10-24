@@ -40,6 +40,10 @@ El validador compartido `backend.politicas.validation.validate_reservation_inter
 
 Las reservas se conservan con estados `pending`, `approved`, `rejected`, `cancelled` o `finished`. `GET /reservations` y `GET /reservations/{id}` muestran los registros permitidos para el rol: el administrador consulta todos, el solicitante los propios y el aprobador los de espacios asignados. Al consultar, las reservas aprobadas cuyo fin ya pasó se marcan como finalizadas. Se puede cancelar con `POST /reservations/{id}/cancel`: el solicitante cancela sus pendientes antes de resolverlas y las aprobadas hasta dos horas antes; el administrador puede cancelar pendientes o aprobadas indicando un motivo. El motivo del solicitante es opcional. El servicio interno `backend.reservas.service.create_reservation` conserva una reserva con el estado inicial determinado por la configuración vigente del espacio; la solicitud pública se integrará en el siguiente punto de implementación.
 
+### Disponibilidad
+
+Una persona con sesión activa puede consultar `GET /availability/spaces/{id}` con `starts_at` y `ends_at`. La respuesta distingue `available`, `occupied` y `blocked`. Solo las reservas pendientes o aprobadas ocupan el intervalo; los bloqueos por mantenimiento también lo bloquean. Los cruces usan intervalos semiabiertos: si una reserva o bloqueo termina justo cuando comienza el intervalo consultado, no hay cruce. Los bloqueos nuevos o modificados se rechazan si coinciden con reservas pendientes o aprobadas y el bloqueo anterior se conserva ante un cambio conflictivo.
+
 ## Frontend
 
 ```powershell

@@ -6,6 +6,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 
 from backend.database import initialize_database
+from backend.disponibilidad.router import router as availability_router
 from backend.espacios.router import router as spaces_router
 from backend.reservas.router import router as reservations_router
 from backend.usuarios.router import router as users_router
@@ -24,6 +25,7 @@ app = FastAPI(
 app.include_router(users_router)
 app.include_router(spaces_router)
 app.include_router(reservations_router)
+app.include_router(availability_router)
 
 
 @app.get("/health", tags=["system"])

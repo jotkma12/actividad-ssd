@@ -106,7 +106,7 @@ def get_reservation_record(connection: sqlite3.Connection, reservation_id: int) 
     return _reservation_dict(row)
 
 
-def _finalize_expired_approved(
+def finalize_expired_approved(
     connection: sqlite3.Connection, *, now: datetime
 ) -> None:
     connection.execute(
@@ -120,7 +120,7 @@ def list_reservations(*, principal: Principal, now: datetime | None = None) -> l
     current_time = _as_utc(now or datetime.now(timezone.utc))
     with database_connection() as connection:
         connection.execute("BEGIN IMMEDIATE")
-        _finalize_expired_approved(connection, now=current_time)
+        finalize_expired_approved(connection, now=current_time)
         if not principal.is_active:
             return []
         if principal.role == "administrator":

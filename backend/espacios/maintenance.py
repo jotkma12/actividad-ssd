@@ -4,14 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import sqlite3
-from zoneinfo import ZoneInfo
 
 from backend.database import database_connection
+from backend.disponibilidad.intervals import intervals_overlap, stored_utc, to_utc
 from backend.historial.records import record_event
 from backend.espacios.service import SpaceNotFoundError
-
-
-LOCAL_TIMEZONE = ZoneInfo("America/Bogota")
 
 
 class MaintenanceBlockNotFoundError(Exception):
@@ -27,16 +24,11 @@ class MaintenanceConflictError(Exception):
 
 
 def _utc_datetime(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=LOCAL_TIMEZONE)
-    return value.astimezone(timezone.utc)
+    return to_utc(value)
 
 
 def _stored_datetime(value: str) -> datetime:
-    parsed = datetime.fromisoformat(value)
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return stored_utc(value)
 
 
 def _block_dict(row: sqlite3.Row) -> dict:
@@ -59,7 +51,9 @@ def _conflicts(
     for reservation in candidates:
         reservation_start = _stored_datetime(reservation["starts_at_utc"])
         reservation_end = _stored_datetime(reservation["ends_at_utc"])
-        if reservation_start < ends_at and starts_at < reservation_end:
+        if intervals_overlap(
+            starts_at, ends_at, reservation_start, reservation_end
+        ):
             overlaps.append(
                 {"id": reservation["id"], "status": reservation["status"]}
             )

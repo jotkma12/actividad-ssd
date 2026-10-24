@@ -34,9 +34,9 @@
 
 ## 6. Disponibilidad (depende del modelo de reservas, espacios y mantenimientos)
 
-- [ ] 6.1 Implementar consulta de disponibilidad usando reservas pendientes/aprobadas, espacios activos y mantenimientos; verificar intervalos parcialmente coincidentes y consecutivos.
-- [ ] 6.2 Implementar validación de coincidencias para creación/cambio de mantenimientos; verificar la regla de negocio confirmada y el tratamiento de reservas afectadas.
-- [ ] 6.3 Agregar pruebas de integración y documentación de disponibilidad; verificar que reservas rechazadas, canceladas y finalizadas liberen el horario.
+- [x] 6.1 Implementar consulta de disponibilidad usando reservas pendientes/aprobadas, espacios activos y mantenimientos; verificar intervalos parcialmente coincidentes y consecutivos.
+- [x] 6.2 Implementar validación de coincidencias para creación/cambio de mantenimientos; verificar la regla de negocio confirmada y el tratamiento de reservas afectadas.
+- [x] 6.3 Agregar pruebas de integración y documentación de disponibilidad; verificar que reservas rechazadas, canceladas y finalizadas liberen el horario.
 
 ## 7. Solicitudes de reserva (depende de disponibilidad y políticas)
 

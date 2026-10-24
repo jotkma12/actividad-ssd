@@ -1,1 +1,1 @@
-"""Módulo de disponibilidad (implementación pendiente)."""
+"""Space availability queries."""
