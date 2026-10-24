@@ -2,8 +2,8 @@
 
 ## 1. Base del proyecto
 
-- [ ] 1.1 Preparar la aplicación modular FastAPI/React y la configuración SQLite prevista en el plan; verificar que el proyecto inicia y crea la base sin errores.
-- [ ] 1.2 Preparar cambios versionados de base de datos para usuarios, espacios, reservas, mantenimientos e historial; verificar creación y actualización desde una base vacía.
+- [x] 1.1 Preparar la aplicación modular FastAPI/React y la configuración SQLite prevista en el plan; verificar que el proyecto inicia y crea la base sin errores.
+- [x] 1.2 Preparar cambios versionados de base de datos para usuarios, espacios, reservas, mantenimientos e historial; verificar creación y actualización desde una base vacía.
 
 ## 2. Usuarios y permisos (depende de la base del proyecto)
 
