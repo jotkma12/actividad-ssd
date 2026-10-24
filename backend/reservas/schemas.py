@@ -1,8 +1,9 @@
 """Reservation request and response models."""
 
+from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 ReservationStatus = Literal["pending", "approved", "rejected", "cancelled", "finished"]
@@ -18,6 +19,17 @@ class ReservationResponse(BaseModel):
     status: ReservationStatus
     created_at_utc: str
     cancellation_reason: str | None
+
+
+class ReservationCreate(BaseModel):
+    space_id: int = Field(gt=0)
+    starts_at: datetime
+    ends_at: datetime
+
+
+class ReservationUpdate(BaseModel):
+    starts_at: datetime
+    ends_at: datetime
 
 
 class CancellationRequest(BaseModel):

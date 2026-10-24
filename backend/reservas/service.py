@@ -6,13 +6,17 @@ from datetime import datetime, timedelta, timezone
 import sqlite3
 
 from backend.database import database_connection
+from backend.disponibilidad.checks import availability_in_transaction
 from backend.historial.records import record_event
 from backend.politicas.approval import initial_reservation_status
 from backend.politicas.validation import validate_reservation_interval
+from backend.reservas.states import finalize_expired_approved
 from backend.usuarios.permissions import Principal
 
 
 CANCELLATION_CUTOFF = timedelta(hours=2)
+
+
 class ReservationNotFoundError(Exception):
     """The reservation does not exist or is outside the caller's visibility."""
 
@@ -27,6 +31,26 @@ class ReservationForbiddenError(Exception):
 
 class CancellationReasonRequiredError(Exception):
     """Administrative cancellation requires a non-empty reason."""
+
+
+class ReservationSpaceNotFoundError(Exception):
+    """The requested space does not exist."""
+
+
+class ReservationSpaceInactiveError(Exception):
+    """The requested space is inactive."""
+
+
+class ReservationCreationForbiddenError(Exception):
+    """Only active requester accounts may submit reservation requests."""
+
+
+class ReservationContentionError(Exception):
+    """SQLite could not acquire its write lock before the configured timeout."""
+
+
+class ApprovalRequiredModificationError(Exception):
+    """Approved changes requiring review await the unresolved interval policy."""
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -58,38 +82,78 @@ def create_reservation(
     ends_at: datetime,
     created_at: datetime | None = None,
 ) -> dict:
-    """Persist a reservation record using the space's current approval rule.
-
-    Availability and request authorization are validated by the later booking
-    workflow. This domain operation centralizes policy validation and storage.
-    """
+    """Atomically validate and persist a reservation request."""
     requested_at = _as_utc(created_at or datetime.now(timezone.utc))
     starts_at_utc, ends_at_utc = validate_reservation_interval(
         starts_at, ends_at, requested_at=requested_at
     )
     created_at_text = _utc_text(requested_at)
-    with database_connection() as connection:
-        connection.execute("BEGIN IMMEDIATE")
-        space = connection.execute(
-            "SELECT requires_approval FROM spaces WHERE id = ?", (space_id,)
-        ).fetchone()
-        if space is None:
-            raise ReservationNotFoundError("El espacio no existe")
-        status = initial_reservation_status(bool(space["requires_approval"]))
-        cursor = connection.execute(
-            """INSERT INTO reservations (
-                   user_id, space_id, starts_at_utc, ends_at_utc, status, created_at_utc
-               ) VALUES (?, ?, ?, ?, ?, ?)""",
-            (
-                user_id,
-                space_id,
-                _utc_text(starts_at_utc),
-                _utc_text(ends_at_utc),
-                status,
-                created_at_text,
-            ),
-        )
-        return get_reservation_record(connection, cursor.lastrowid)
+    try:
+        with database_connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            user = connection.execute(
+                "SELECT role, is_active FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+            if user is None or user["role"] != "requester" or not user["is_active"]:
+                raise ReservationCreationForbiddenError
+            space = connection.execute(
+                "SELECT is_active, requires_approval FROM spaces WHERE id = ?",
+                (space_id,),
+            ).fetchone()
+            if space is None:
+                raise ReservationSpaceNotFoundError
+            if not space["is_active"]:
+                raise ReservationSpaceInactiveError
+
+            finalize_expired_approved(connection, now=requested_at)
+            availability = availability_in_transaction(
+                connection,
+                space_id=space_id,
+                starts_at_utc=starts_at_utc,
+                ends_at_utc=ends_at_utc,
+            )
+            if availability != "available":
+                raise ReservationConflictError(
+                    "El intervalo está ocupado por una reserva o bloqueado por mantenimiento"
+                )
+
+            initial_status = initial_reservation_status(
+                bool(space["requires_approval"])
+            )
+            cursor = connection.execute(
+                """INSERT INTO reservations (
+                       user_id, space_id, starts_at_utc, ends_at_utc, status,
+                       created_at_utc
+                   ) VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    user_id,
+                    space_id,
+                    _utc_text(starts_at_utc),
+                    _utc_text(ends_at_utc),
+                    initial_status,
+                    created_at_text,
+                ),
+            )
+            reservation_id = cursor.lastrowid
+            record_event(
+                connection,
+                actor_user_id=user_id,
+                entity_type="reservation",
+                entity_id=reservation_id,
+                action="reservation_created",
+                old_values=None,
+                new_values={
+                    "space_id": space_id,
+                    "starts_at_utc": _utc_text(starts_at_utc),
+                    "ends_at_utc": _utc_text(ends_at_utc),
+                    "status": initial_status,
+                },
+            )
+            return get_reservation_record(connection, reservation_id)
+    except sqlite3.OperationalError as error:
+        if "locked" in str(error).lower() or "busy" in str(error).lower():
+            raise ReservationContentionError from error
+        raise
 
 
 def get_reservation_record(connection: sqlite3.Connection, reservation_id: int) -> dict:
@@ -104,16 +168,6 @@ def get_reservation_record(connection: sqlite3.Connection, reservation_id: int) 
     if row is None:
         raise ReservationNotFoundError("La reserva no existe")
     return _reservation_dict(row)
-
-
-def finalize_expired_approved(
-    connection: sqlite3.Connection, *, now: datetime
-) -> None:
-    connection.execute(
-        """UPDATE reservations SET status = 'finished'
-           WHERE status = 'approved' AND ends_at_utc <= ?""",
-        (_utc_text(now),),
-    )
 
 
 def list_reservations(*, principal: Principal, now: datetime | None = None) -> list[dict]:
@@ -164,6 +218,104 @@ def get_reservation(
         raise ReservationNotFoundError("La reserva no existe")
     with database_connection() as connection:
         return get_reservation_record(connection, reservation_id)
+
+
+def update_reservation(
+    *,
+    reservation_id: int,
+    actor_user_id: int,
+    starts_at: datetime,
+    ends_at: datetime,
+    now: datetime | None = None,
+) -> dict:
+    """Change a requester's pending or eligible approved reservation."""
+    current_time = _as_utc(now or datetime.now(timezone.utc))
+    starts_at_utc, ends_at_utc = validate_reservation_interval(
+        starts_at, ends_at, requested_at=current_time
+    )
+    updated = None
+    finalized = False
+    with database_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        reservation = connection.execute(
+            """SELECT id, user_id, space_id, starts_at_utc, ends_at_utc, status
+               FROM reservations WHERE id = ?""",
+            (reservation_id,),
+        ).fetchone()
+        if reservation is None or reservation["user_id"] != actor_user_id:
+            raise ReservationNotFoundError("La reserva no existe")
+        status = reservation["status"]
+        if (
+            status == "approved"
+            and _parse_utc(reservation["ends_at_utc"]) <= current_time
+        ):
+            connection.execute(
+                "UPDATE reservations SET status = 'finished' WHERE id = ?",
+                (reservation_id,),
+            )
+            updated = get_reservation_record(connection, reservation_id)
+            finalized = True
+        elif status not in {"pending", "approved"}:
+            raise ReservationConflictError("La reserva ya no se puede modificar")
+        else:
+            space = connection.execute(
+                "SELECT is_active, requires_approval FROM spaces WHERE id = ?",
+                (reservation["space_id"],),
+            ).fetchone()
+            if space is None:
+                raise ReservationSpaceNotFoundError
+            if not space["is_active"]:
+                raise ReservationSpaceInactiveError
+            if status == "approved":
+                if (
+                    _parse_utc(reservation["starts_at_utc"]) - current_time
+                    < CANCELLATION_CUTOFF
+                ):
+                    raise ReservationConflictError(
+                        "La reserva aprobada solo se puede modificar hasta dos horas antes"
+                    )
+                if space["requires_approval"]:
+                    raise ApprovalRequiredModificationError
+
+            availability = availability_in_transaction(
+                connection,
+                space_id=reservation["space_id"],
+                starts_at_utc=starts_at_utc,
+                ends_at_utc=ends_at_utc,
+                exclude_reservation_id=reservation_id,
+            )
+            if availability != "available":
+                raise ReservationConflictError(
+                    "El nuevo intervalo está ocupado o bloqueado por mantenimiento"
+                )
+            old_values = {
+                "starts_at_utc": reservation["starts_at_utc"],
+                "ends_at_utc": reservation["ends_at_utc"],
+                "status": status,
+            }
+            connection.execute(
+                """UPDATE reservations SET starts_at_utc = ?, ends_at_utc = ?
+                   WHERE id = ?""",
+                (_utc_text(starts_at_utc), _utc_text(ends_at_utc), reservation_id),
+            )
+            record_event(
+                connection,
+                actor_user_id=actor_user_id,
+                entity_type="reservation",
+                entity_id=reservation_id,
+                action="reservation_updated",
+                old_values=old_values,
+                new_values={
+                    "starts_at_utc": _utc_text(starts_at_utc),
+                    "ends_at_utc": _utc_text(ends_at_utc),
+                    "status": status,
+                },
+            )
+            updated = get_reservation_record(connection, reservation_id)
+
+    if finalized:
+        raise ReservationConflictError("La reserva ya terminó y fue finalizada")
+    return updated
 
 
 def cancel_reservation(

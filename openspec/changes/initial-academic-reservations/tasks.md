@@ -40,10 +40,10 @@
 
 ## 7. Solicitudes de reserva (depende de disponibilidad y políticas)
 
-- [ ] 7.1 Implementar creación de reservas para solicitantes activos y espacios activos; verificar rechazo de reglas incumplidas y estado inicial según aprobación configurada.
-- [ ] 7.2 Hacer atómica la comprobación y escritura de reservas mediante la transacción SQLite prevista; verificar con 20 solicitudes simultáneas incompatibles que como máximo una quede aceptada.
+- [x] 7.1 Implementar creación de reservas para solicitantes activos y espacios activos; verificar rechazo de reglas incumplidas y estado inicial según aprobación configurada.
+- [x] 7.2 Hacer atómica la comprobación y escritura de reservas mediante la transacción SQLite prevista; verificar con 20 solicitudes simultáneas incompatibles que como máximo una quede aceptada.
 - [ ] 7.3 Implementar consulta y modificación de reservas pendientes/aprobadas; verificar propiedad, plazos, políticas y disponibilidad del nuevo intervalo.
-- [ ] 7.4 Agregar pruebas de integración y concurrencia; verificar que errores de disponibilidad o contención no dejen registros incompatibles.
+- [x] 7.4 Agregar pruebas de integración y concurrencia; verificar que errores de disponibilidad o contención no dejen registros incompatibles.
 
 ## 8. Aprobaciones (depende de reservas y permisos)
 

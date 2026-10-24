@@ -5,8 +5,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from backend.database import database_connection
-from backend.disponibilidad.intervals import intervals_overlap, stored_utc, to_utc
-from backend.reservas.service import finalize_expired_approved
+from backend.disponibilidad.checks import availability_in_transaction
+from backend.disponibilidad.intervals import to_utc
+from backend.reservas.states import finalize_expired_approved
 
 
 class AvailabilitySpaceNotFoundError(Exception):
@@ -42,39 +43,13 @@ def query_availability(
             raise InactiveAvailabilitySpaceError
         finalize_expired_approved(connection, now=current_time)
 
-        reservations = connection.execute(
-            """SELECT starts_at_utc, ends_at_utc FROM reservations
-               WHERE space_id = ? AND status IN ('pending', 'approved')""",
-            (space_id,),
-        ).fetchall()
-        has_reservation = any(
-            intervals_overlap(
-                proposed_start,
-                proposed_end,
-                stored_utc(row["starts_at_utc"]),
-                stored_utc(row["ends_at_utc"]),
-            )
-            for row in reservations
+        availability = availability_in_transaction(
+            connection,
+            space_id=space_id,
+            starts_at_utc=proposed_start,
+            ends_at_utc=proposed_end,
         )
 
-        blocks = connection.execute(
-            """SELECT starts_at_utc, ends_at_utc FROM maintenance_blocks
-               WHERE space_id = ?""",
-            (space_id,),
-        ).fetchall()
-        has_maintenance = any(
-            intervals_overlap(
-                proposed_start,
-                proposed_end,
-                stored_utc(row["starts_at_utc"]),
-                stored_utc(row["ends_at_utc"]),
-            )
-            for row in blocks
-        )
-
-    availability = (
-        "blocked" if has_maintenance else "occupied" if has_reservation else "available"
-    )
     return {
         "space_id": space_id,
         "starts_at_utc": proposed_start.isoformat(timespec="microseconds"),
