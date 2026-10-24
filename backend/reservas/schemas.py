@@ -6,7 +6,16 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
-ReservationStatus = Literal["pending", "approved", "rejected", "cancelled", "finished"]
+ReservationStatus = Literal[
+    "pending", "approved", "rejected", "rejected_expired", "cancelled", "finished"
+]
+
+
+class ReservationChangeSummary(BaseModel):
+    id: int
+    starts_at_utc: str
+    ends_at_utc: str
+    status: Literal["pending"]
 
 
 class ReservationResponse(BaseModel):
@@ -19,6 +28,7 @@ class ReservationResponse(BaseModel):
     status: ReservationStatus
     created_at_utc: str
     cancellation_reason: str | None
+    pending_change: ReservationChangeSummary | None = None
 
 
 class ReservationCreate(BaseModel):

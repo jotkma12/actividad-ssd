@@ -7,15 +7,19 @@ Permite solicitar el uso de espacios y gestionar cada reserva durante su ciclo d
 ## ADDED Requirements
 
 ### Requirement: Conservar los estados de las reservas
-El sistema SHALL representar cada reserva con exactamente uno de estos estados: pendiente, aprobada, rechazada, cancelada o finalizada.
+El sistema SHALL representar cada reserva con exactamente uno de estos estados: pendiente, aprobada, rechazada, rechazada por vencimiento, cancelada o finalizada.
 
 #### Scenario: Finalizar reserva aprobada vencida
 - **WHEN** el sistema evalúa una reserva aprobada cuyo fin ya ocurrió
 - **THEN** el sistema cambia su estado a finalizada
 
 #### Scenario: Estados cerrados no se reabren
-- **WHEN** una operación ordinaria intenta cambiar una reserva rechazada, cancelada o finalizada
+- **WHEN** una operación ordinaria intenta cambiar una reserva rechazada, rechazada por vencimiento, cancelada o finalizada
 - **THEN** el sistema rechaza el cambio y conserva el estado
+
+#### Scenario: Rechazo por vencimiento libera el intervalo
+- **WHEN** una reserva pasa a rechazada por vencimiento al llegar su hora de inicio
+- **THEN** deja de ocupar el horario para nuevas consultas y solicitudes, salvo que otra reserva o bloqueo lo ocupe
 ### Requirement: Crear una reserva
 El sistema SHALL permitir a un solicitante activo crear una reserva para un espacio activo cuando el horario cumple las políticas y está disponible.
 
@@ -83,6 +87,19 @@ El sistema SHALL permitir al solicitante modificar una reserva aprobada hasta do
 #### Scenario: Modificación rechazada por horario inválido o ocupado
 - **WHEN** una modificación de reserva aprobada incumple una política o su nuevo horario no está disponible
 - **THEN** el sistema rechaza la modificación y conserva los datos previos
+
+#### Scenario: Cambio aprobado requiere autorización
+- **WHEN** una reserva aprobada pertenece a un espacio que requiere aprobación y el solicitante pide un nuevo horario válido y disponible
+- **THEN** la reserva original permanece aprobada y ocupa su intervalo mientras el nuevo intervalo queda bloqueado provisionalmente
+- **AND** el cambio requiere una decisión de un aprobador asignado antes de sustituir el horario original
+
+#### Scenario: Cambio aprobado es rechazado
+- **WHEN** un aprobador asignado rechaza el cambio pendiente de una reserva aprobada
+- **THEN** el sistema libera el nuevo intervalo provisional y conserva aprobada la reserva con las fechas y horas originales
+
+#### Scenario: Se cancela la reserva original mientras espera el cambio
+- **WHEN** el solicitante o un administrador cancela la reserva original mientras tiene un cambio pendiente
+- **THEN** el sistema cancela también el cambio pendiente y libera su intervalo provisional
 
 ### Requirement: Cancelar reservas
 El sistema SHALL permitir cancelar reservas según el rol, el estado y el plazo de cancelación aplicable.

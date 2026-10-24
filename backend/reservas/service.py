@@ -10,7 +10,11 @@ from backend.disponibilidad.checks import availability_in_transaction
 from backend.historial.records import record_event
 from backend.politicas.approval import initial_reservation_status
 from backend.politicas.validation import validate_reservation_interval
-from backend.reservas.states import finalize_expired_approved
+from backend.reservas.states import (
+    cancel_pending_reservation_changes,
+    expire_due_pending_reservations,
+    finalize_expired_approved,
+)
 from backend.usuarios.permissions import Principal
 
 
@@ -49,10 +53,6 @@ class ReservationContentionError(Exception):
     """SQLite could not acquire its write lock before the configured timeout."""
 
 
-class ApprovalRequiredModificationError(Exception):
-    """Approved changes requiring review await the unresolved interval policy."""
-
-
 def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("La hora actual debe incluir una zona horaria")
@@ -71,7 +71,20 @@ def _parse_utc(value: str) -> datetime:
 
 
 def _reservation_dict(row: sqlite3.Row) -> dict:
-    return dict(row)
+    result = dict(row)
+    change_id = result.pop("pending_change_id", None)
+    change_starts = result.pop("pending_change_starts_at_utc", None)
+    change_ends = result.pop("pending_change_ends_at_utc", None)
+    if change_id is not None:
+        result["pending_change"] = {
+            "id": change_id,
+            "starts_at_utc": change_starts,
+            "ends_at_utc": change_ends,
+            "status": "pending",
+        }
+    else:
+        result["pending_change"] = None
+    return result
 
 
 def create_reservation(
@@ -89,6 +102,7 @@ def create_reservation(
     )
     created_at_text = _utc_text(requested_at)
     try:
+        expire_due_pending_reservations(now=requested_at)
         with database_connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             user = connection.execute(
@@ -160,8 +174,14 @@ def get_reservation_record(connection: sqlite3.Connection, reservation_id: int) 
     row = connection.execute(
         """SELECT r.id, r.user_id, r.space_id, s.name AS space_name,
                   r.starts_at_utc, r.ends_at_utc, r.status, r.created_at_utc,
-                  r.cancellation_reason
+                  r.cancellation_reason,
+                  c.id AS pending_change_id,
+                  c.starts_at_utc AS pending_change_starts_at_utc,
+                  c.ends_at_utc AS pending_change_ends_at_utc
            FROM reservations AS r JOIN spaces AS s ON s.id = r.space_id
+           LEFT JOIN reservation_change_requests AS c
+             ON c.reservation_id = r.id AND c.status = 'pending'
+            AND r.status = 'approved'
            WHERE r.id = ?""",
         (reservation_id,),
     ).fetchone()
@@ -172,6 +192,7 @@ def get_reservation_record(connection: sqlite3.Connection, reservation_id: int) 
 
 def list_reservations(*, principal: Principal, now: datetime | None = None) -> list[dict]:
     current_time = _as_utc(now or datetime.now(timezone.utc))
+    expire_due_pending_reservations(now=current_time)
     with database_connection() as connection:
         connection.execute("BEGIN IMMEDIATE")
         finalize_expired_approved(connection, now=current_time)
@@ -181,16 +202,28 @@ def list_reservations(*, principal: Principal, now: datetime | None = None) -> l
             rows = connection.execute(
                 """SELECT r.id, r.user_id, r.space_id, s.name AS space_name,
                           r.starts_at_utc, r.ends_at_utc, r.status, r.created_at_utc,
-                          r.cancellation_reason
+                          r.cancellation_reason,
+                          c.id AS pending_change_id,
+                          c.starts_at_utc AS pending_change_starts_at_utc,
+                          c.ends_at_utc AS pending_change_ends_at_utc
                    FROM reservations AS r JOIN spaces AS s ON s.id = r.space_id
+                   LEFT JOIN reservation_change_requests AS c
+                     ON c.reservation_id = r.id AND c.status = 'pending'
+                    AND r.status = 'approved'
                    ORDER BY r.starts_at_utc, r.id"""
             ).fetchall()
         elif principal.role == "requester":
             rows = connection.execute(
                 """SELECT r.id, r.user_id, r.space_id, s.name AS space_name,
                           r.starts_at_utc, r.ends_at_utc, r.status, r.created_at_utc,
-                          r.cancellation_reason
+                          r.cancellation_reason,
+                          c.id AS pending_change_id,
+                          c.starts_at_utc AS pending_change_starts_at_utc,
+                          c.ends_at_utc AS pending_change_ends_at_utc
                    FROM reservations AS r JOIN spaces AS s ON s.id = r.space_id
+                   LEFT JOIN reservation_change_requests AS c
+                     ON c.reservation_id = r.id AND c.status = 'pending'
+                    AND r.status = 'approved'
                    WHERE r.user_id = ? ORDER BY r.starts_at_utc, r.id""",
                 (principal.user_id,),
             ).fetchall()
@@ -198,9 +231,15 @@ def list_reservations(*, principal: Principal, now: datetime | None = None) -> l
             rows = connection.execute(
                 """SELECT r.id, r.user_id, r.space_id, s.name AS space_name,
                           r.starts_at_utc, r.ends_at_utc, r.status, r.created_at_utc,
-                          r.cancellation_reason
+                          r.cancellation_reason,
+                          c.id AS pending_change_id,
+                          c.starts_at_utc AS pending_change_starts_at_utc,
+                          c.ends_at_utc AS pending_change_ends_at_utc
                    FROM reservations AS r JOIN spaces AS s ON s.id = r.space_id
                    JOIN space_approvers AS sa ON sa.space_id = r.space_id
+                   LEFT JOIN reservation_change_requests AS c
+                     ON c.reservation_id = r.id AND c.status = 'pending'
+                    AND r.status = 'approved'
                    WHERE sa.approver_user_id = ?
                    ORDER BY r.starts_at_utc, r.id""",
                 (principal.user_id,),
@@ -233,6 +272,7 @@ def update_reservation(
     starts_at_utc, ends_at_utc = validate_reservation_interval(
         starts_at, ends_at, requested_at=current_time
     )
+    expire_due_pending_reservations(now=current_time)
     updated = None
     finalized = False
     with database_connection() as connection:
@@ -274,9 +314,6 @@ def update_reservation(
                     raise ReservationConflictError(
                         "La reserva aprobada solo se puede modificar hasta dos horas antes"
                     )
-                if space["requires_approval"]:
-                    raise ApprovalRequiredModificationError
-
             availability = availability_in_transaction(
                 connection,
                 space_id=reservation["space_id"],
@@ -288,30 +325,74 @@ def update_reservation(
                 raise ReservationConflictError(
                     "El nuevo intervalo está ocupado o bloqueado por mantenimiento"
                 )
-            old_values = {
-                "starts_at_utc": reservation["starts_at_utc"],
-                "ends_at_utc": reservation["ends_at_utc"],
-                "status": status,
-            }
-            connection.execute(
-                """UPDATE reservations SET starts_at_utc = ?, ends_at_utc = ?
-                   WHERE id = ?""",
-                (_utc_text(starts_at_utc), _utc_text(ends_at_utc), reservation_id),
-            )
-            record_event(
-                connection,
-                actor_user_id=actor_user_id,
-                entity_type="reservation",
-                entity_id=reservation_id,
-                action="reservation_updated",
-                old_values=old_values,
-                new_values={
-                    "starts_at_utc": _utc_text(starts_at_utc),
-                    "ends_at_utc": _utc_text(ends_at_utc),
+            if status == "approved" and space["requires_approval"]:
+                existing_change = connection.execute(
+                    """SELECT id FROM reservation_change_requests
+                       WHERE reservation_id = ? AND status = 'pending'""",
+                    (reservation_id,),
+                ).fetchone()
+                if existing_change is not None:
+                    raise ReservationConflictError(
+                        "La reserva ya tiene un cambio pendiente de aprobación"
+                    )
+                proposed_starts = _utc_text(starts_at_utc)
+                proposed_ends = _utc_text(ends_at_utc)
+                cursor = connection.execute(
+                    """INSERT INTO reservation_change_requests (
+                           reservation_id, starts_at_utc, ends_at_utc, status,
+                           created_at_utc
+                       ) VALUES (?, ?, ?, 'pending', ?)""",
+                    (
+                        reservation_id,
+                        proposed_starts,
+                        proposed_ends,
+                        _utc_text(current_time),
+                    ),
+                )
+                record_event(
+                    connection,
+                    actor_user_id=actor_user_id,
+                    entity_type="reservation",
+                    entity_id=reservation_id,
+                    action="reservation_change_requested",
+                    old_values={
+                        "starts_at_utc": reservation["starts_at_utc"],
+                        "ends_at_utc": reservation["ends_at_utc"],
+                        "status": "approved",
+                    },
+                    new_values={
+                        "change_request_id": cursor.lastrowid,
+                        "starts_at_utc": proposed_starts,
+                        "ends_at_utc": proposed_ends,
+                        "status": "pending",
+                    },
+                )
+                updated = get_reservation_record(connection, reservation_id)
+            else:
+                old_values = {
+                    "starts_at_utc": reservation["starts_at_utc"],
+                    "ends_at_utc": reservation["ends_at_utc"],
                     "status": status,
-                },
-            )
-            updated = get_reservation_record(connection, reservation_id)
+                }
+                connection.execute(
+                    """UPDATE reservations SET starts_at_utc = ?, ends_at_utc = ?
+                       WHERE id = ?""",
+                    (_utc_text(starts_at_utc), _utc_text(ends_at_utc), reservation_id),
+                )
+                record_event(
+                    connection,
+                    actor_user_id=actor_user_id,
+                    entity_type="reservation",
+                    entity_id=reservation_id,
+                    action="reservation_updated",
+                    old_values=old_values,
+                    new_values={
+                        "starts_at_utc": _utc_text(starts_at_utc),
+                        "ends_at_utc": _utc_text(ends_at_utc),
+                        "status": status,
+                    },
+                )
+                updated = get_reservation_record(connection, reservation_id)
 
     if finalized:
         raise ReservationConflictError("La reserva ya terminó y fue finalizada")
@@ -371,6 +452,13 @@ def cancel_reservation(
                 "La reserva aprobada solo se puede cancelar hasta dos horas antes"
             )
         else:
+            cancel_pending_reservation_changes(
+                connection,
+                reservation_id=reservation_id,
+                actor_user_id=actor_user_id,
+                reason=clean_reason or "La reserva original fue cancelada.",
+                now=current_time,
+            )
             connection.execute(
                 """UPDATE reservations SET status = 'cancelled', cancellation_reason = ?
                    WHERE id = ?""",

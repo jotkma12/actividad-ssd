@@ -38,20 +38,21 @@
 - [x] 6.2 Implementar validación de coincidencias para creación/cambio de mantenimientos; verificar la regla de negocio confirmada y el tratamiento de reservas afectadas.
 - [x] 6.3 Agregar pruebas de integración y documentación de disponibilidad; verificar que reservas rechazadas, canceladas y finalizadas liberen el horario.
 
-## 7. Solicitudes de reserva (depende de disponibilidad y políticas)
+## 7. Solicitudes de reserva (depende de disponibilidad y políticas; los cambios aprobados también dependen de aprobaciones)
 
 - [x] 7.1 Implementar creación de reservas para solicitantes activos y espacios activos; verificar rechazo de reglas incumplidas y estado inicial según aprobación configurada.
 - [x] 7.2 Hacer atómica la comprobación y escritura de reservas mediante la transacción SQLite prevista; verificar con 20 solicitudes simultáneas incompatibles que como máximo una quede aceptada.
-- [ ] 7.3 Implementar consulta y modificación de reservas pendientes/aprobadas; verificar propiedad, plazos, políticas y disponibilidad del nuevo intervalo.
+- [x] 7.3 Implementar consulta y modificación de reservas pendientes/aprobadas; para cambios que requieren aprobación, conservar ocupada la reserva original y bloquear provisionalmente el nuevo horario, sustituir el original al aprobar y conservarlo al rechazar; verificar propiedad, plazos, políticas, disponibilidad y transiciones.
 - [x] 7.4 Agregar pruebas de integración y concurrencia; verificar que errores de disponibilidad o contención no dejen registros incompatibles.
 
 ## 8. Aprobaciones (depende de reservas y permisos)
 
-- [ ] 8.1 Implementar bandeja de solicitudes pendientes limitada a espacios asignados; verificar que no se revelen solicitudes de otros espacios.
-- [ ] 8.2 Confirmar qué ocurre cuando una solicitud pendiente llega a su inicio o fin sin decisión; actualizar los escenarios y verificar que la regla quede aprobada antes de implementar vencimientos.
-- [ ] 8.3 Implementar aprobación y rechazo con motivo obligatorio; verificar cambios de estado, rechazo sin motivo, decisiones repetidas y decisiones concurrentes.
-- [ ] 8.4 Acordar qué intervalo bloquea una modificación que requiere nueva aprobación y qué ocurre si se rechaza; actualizar escenarios antes de implementar ese flujo.
-- [ ] 8.5 Agregar pruebas de integración y documentación de aprobaciones; verificar asignación, prohibición de autoaprobación y estados válidos.
+- [x] 8.1 Implementar bandeja de solicitudes pendientes limitada a espacios asignados; verificar que no se revelen solicitudes de otros espacios.
+- [x] 8.2 Confirmar qué ocurre cuando una solicitud pendiente llega sin decisión a su hora de inicio; actualizar los escenarios y verificar que la regla quede aprobada antes de implementar vencimientos.
+- [x] 8.3 Implementar aprobación y rechazo con motivo obligatorio; verificar cambios de estado, rechazo sin motivo, decisiones repetidas y decisiones concurrentes.
+- [x] 8.4 Acordar qué intervalo bloquea una modificación que requiere nueva aprobación y qué ocurre si se rechaza; actualizar escenarios antes de implementar ese flujo.
+- [x] 8.5 Agregar pruebas de integración y documentación de aprobaciones; verificar asignación, prohibición de autoaprobación y estados válidos.
+- [x] 8.6 Implementar el vencimiento automático de solicitudes pendientes al llegar su hora de inicio; registrar motivo y evento del sistema, liberar el intervalo y rechazar decisiones posteriores; verificar decisión frente a vencimiento concurrente y que no queden reservas incompatibles.
 
 ## 9. Historial (depende de usuarios y de las operaciones de cada módulo)
 

@@ -65,14 +65,24 @@ Cuando resolver un conflicto requiera cancelar o cambiar una reserva, el adminis
 La base y la identidad preceden a la administración de espacios. El modelo y los estados de reserva se preparan antes del cálculo de disponibilidad, que necesita leer reservas, espacios y mantenimientos. La creación de solicitudes solo se habilita después de integrar esa validación en la misma transacción que guarda la reserva. Aprobaciones dependen de reservas y permisos; el historial se integra con las operaciones de cada módulo. La administración de mantenimientos aparece antes de disponibilidad porque esta debe considerarlos, aunque el plan ubica su cierre y validación final en la etapa final.
 ### Límites de los estados
 
-`reservations` define los estados de una reserva y las transiciones de cancelación y finalización. `approvals` define la decisión que mueve una solicitud pendiente a aprobada o rechazada. `availability` interpreta qué estados ocupan un intervalo; no decide estados ni autorizaciones.
+`reservations` define los estados de una reserva y las transiciones de cancelación y finalización. `approvals` define las decisiones de solicitudes pendientes y cambios propuestos; una solicitud sin decisión al inicio pasa a «Rechazada por vencimiento». `availability` interpreta qué estados y cambios provisionales ocupan un intervalo; no decide estados ni autorizaciones.
+
+### Vencimiento de solicitudes sin decisión
+
+Una solicitud que siga pendiente al llegar su hora de inicio pasará al estado «Rechazada por vencimiento». El sistema registrará el motivo de vencimiento; ese estado no ocupará el horario y no podrá aprobarse posteriormente. Si otra reserva o un bloqueo ocupa el intervalo, seguirá ocupándolo. La transición automática se ejecuta periódicamente y también antes de operaciones relevantes; comparte transacción de escritura con las decisiones para que una solicitud no pueda aprobarse después de su inicio.
+
+### Cambios de reservas aprobadas que requieren autorización
+
+Cuando el espacio exige aprobación, la solicitud de cambio conservará la reserva original aprobada y su intervalo ocupado. El intervalo propuesto se validará con las políticas temporales y disponibilidad vigentes, incluyendo reservas activas, bloqueos de mantenimiento y otros cambios pendientes, y quedará ocupado provisionalmente mientras espera decisión. Si se aprueba, el horario de la reserva se sustituirá por el nuevo dentro de una operación atómica y el intervalo original quedará libre. Si se rechaza, se liberará el intervalo provisional y se conservarán el estado aprobado y las fechas originales. Solo podrá existir un cambio pendiente por reserva.
+
+Si la reserva original se cancela mientras el cambio está pendiente, el sistema cancela también la solicitud de cambio y libera su intervalo provisional para que no quede un bloqueo sin una reserva vigente.
 
 ## Risks / Trade-offs
 
 - [SQLite serializa las escrituras y tiene límites de concurrencia] → Mantener la transacción corta; configurar espera o devolver un mensaje claro; evaluar PostgreSQL solo si el crecimiento lo exige.
 - [Reglas de calendario pueden interpretarse con otra zona horaria] → Evaluar y mostrar días/horas en `America/Bogota`, normalizando los instantes almacenados a UTC.
 - [Una cuenta desactivada puede tener reservas futuras] → Decisión confirmada: conservarlas para revisión del administrador, sin cancelación automática.
-- [Un cambio de una reserva aprobada puede dejar ocupaciones ambiguas mientras espera nueva aprobación] → No programar el flujo hasta resolver la pregunta de la siguiente sección.
+- [Un cambio de una reserva aprobada puede dejar ocupaciones ambiguas mientras espera nueva aprobación] → Decisión confirmada: conservar ocupada la reserva original y bloquear provisionalmente el intervalo nuevo; aprobación sustituye el intervalo y rechazo conserva el original.
 - [El plan excluye avisos automáticos por correo] → Decisión confirmada: el administrador contacta manualmente a los solicitantes afectados por bloqueos de mantenimiento; no se integran servicios de notificación ni se fija un canal obligatorio.
 - [Un bloqueo de mantenimiento podría coincidir con reservas existentes] → Decisión confirmada: rechazar la creación o modificación hasta resolver todas las reservas pendientes o aprobadas que se crucen con el intervalo.
 
@@ -82,7 +92,5 @@ No hay una aplicación ni datos funcionales que migrar en esta etapa. Durante un
 
 ## Open Questions
 
-- Cuando una solicitud pendiente llega a su hora de inicio o de fin sin decisión, ¿se cancela, se rechaza o permanece pendiente? El plan define el bloqueo temporal, pero no el vencimiento de una solicitud sin resolver.
-- Cuando se modifica una reserva aprobada en un espacio que requiere aprobación, ¿la reserva original continúa ocupando su horario mientras se decide el cambio, o se libera al enviar la modificación? ¿Qué intervalo ocupa la modificación y qué ocurre con la reserva si se rechaza el cambio?
 - Cuando se desactiva un espacio con reservas futuras, ¿qué canal manual y qué responsable se usarán para notificar a los solicitantes? El plan excluye avisos automáticos por correo y no define un canal alternativo.
 - ¿Qué permisos de consulta tendrán los directivos/auditores si se habilitan reportes en una versión posterior? Se dejan fuera de los roles iniciales porque los reportes son opcionales y no forman parte de esta propuesta.

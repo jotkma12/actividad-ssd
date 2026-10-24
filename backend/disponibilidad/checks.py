@@ -38,6 +38,34 @@ def availability_in_transaction(
         for row in reservations
     )
 
+    if exclude_reservation_id is None:
+        pending_changes = connection.execute(
+            """SELECT c.starts_at_utc, c.ends_at_utc
+               FROM reservation_change_requests AS c
+               JOIN reservations AS r ON r.id = c.reservation_id
+               WHERE r.space_id = ? AND r.status = 'approved'
+                 AND c.status = 'pending'""",
+            (space_id,),
+        ).fetchall()
+    else:
+        pending_changes = connection.execute(
+            """SELECT c.starts_at_utc, c.ends_at_utc
+               FROM reservation_change_requests AS c
+               JOIN reservations AS r ON r.id = c.reservation_id
+               WHERE r.space_id = ? AND r.status = 'approved'
+                 AND r.id != ? AND c.status = 'pending'""",
+            (space_id, exclude_reservation_id),
+        ).fetchall()
+    has_pending_change = any(
+        intervals_overlap(
+            starts_at_utc,
+            ends_at_utc,
+            stored_utc(row["starts_at_utc"]),
+            stored_utc(row["ends_at_utc"]),
+        )
+        for row in pending_changes
+    )
+
     blocks = connection.execute(
         """SELECT starts_at_utc, ends_at_utc FROM maintenance_blocks
            WHERE space_id = ?""",
@@ -52,4 +80,10 @@ def availability_in_transaction(
         )
         for row in blocks
     )
-    return "blocked" if has_maintenance else "occupied" if has_reservation else "available"
+    return (
+        "blocked"
+        if has_maintenance
+        else "occupied"
+        if has_reservation or has_pending_change
+        else "available"
+    )

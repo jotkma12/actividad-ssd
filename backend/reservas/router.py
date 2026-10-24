@@ -19,7 +19,6 @@ from backend.reservas.service import (
     ReservationSpaceInactiveError,
     ReservationSpaceNotFoundError,
     ReservationContentionError,
-    ApprovalRequiredModificationError,
     cancel_reservation,
     create_reservation,
     get_reservation,
@@ -82,8 +81,6 @@ def update(
         raise HTTPException(status_code=404, detail="Reserva no encontrada") from None
     except ReservationSpaceInactiveError:
         raise HTTPException(status_code=409, detail="El espacio está inactivo") from None
-    except ApprovalRequiredModificationError:
-        raise HTTPException(status_code=409, detail="La modificación requiere una nueva aprobación") from None
     except ReservationConflictError as error:
         raise HTTPException(status_code=409, detail=str(error)) from None
     except ValueError as error:

@@ -7,7 +7,10 @@ from datetime import datetime, timezone
 from backend.database import database_connection
 from backend.disponibilidad.checks import availability_in_transaction
 from backend.disponibilidad.intervals import to_utc
-from backend.reservas.states import finalize_expired_approved
+from backend.reservas.states import (
+    expire_due_pending_reservations,
+    finalize_expired_approved,
+)
 
 
 class AvailabilitySpaceNotFoundError(Exception):
@@ -31,6 +34,7 @@ def query_availability(
     if proposed_start >= proposed_end:
         raise ValueError("El inicio debe ser anterior al fin del intervalo")
     current_time = to_utc(now or datetime.now(timezone.utc))
+    expire_due_pending_reservations(now=current_time)
 
     with database_connection() as connection:
         connection.execute("BEGIN IMMEDIATE")

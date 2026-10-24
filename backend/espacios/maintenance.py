@@ -8,6 +8,7 @@ import sqlite3
 from backend.database import database_connection
 from backend.disponibilidad.intervals import intervals_overlap, stored_utc, to_utc
 from backend.historial.records import record_event
+from backend.reservas.states import expire_due_pending_reservations
 from backend.espacios.service import SpaceNotFoundError
 
 
@@ -57,6 +58,28 @@ def _conflicts(
             overlaps.append(
                 {"id": reservation["id"], "status": reservation["status"]}
             )
+    pending_changes = connection.execute(
+        """SELECT c.id, c.reservation_id, c.starts_at_utc, c.ends_at_utc
+           FROM reservation_change_requests AS c
+           JOIN reservations AS r ON r.id = c.reservation_id
+           WHERE r.space_id = ? AND r.status = 'approved'
+             AND c.status = 'pending'""",
+        (space_id,),
+    ).fetchall()
+    for change in pending_changes:
+        if intervals_overlap(
+            starts_at,
+            ends_at,
+            _stored_datetime(change["starts_at_utc"]),
+            _stored_datetime(change["ends_at_utc"]),
+        ):
+            overlaps.append(
+                {
+                    "id": change["reservation_id"],
+                    "status": "change_pending",
+                    "change_request_id": change["id"],
+                }
+            )
     return overlaps
 
 
@@ -93,6 +116,7 @@ def create_maintenance_block(
     starts_text = starts_at_utc.isoformat(timespec="microseconds")
     ends_text = ends_at_utc.isoformat(timespec="microseconds")
     created_at = datetime.now(timezone.utc).isoformat()
+    expire_due_pending_reservations()
     with database_connection() as connection:
         connection.execute("BEGIN IMMEDIATE")
         _ensure_space_exists(connection, space_id)
@@ -151,6 +175,7 @@ def update_maintenance_block(
     starts_text = starts_at_utc.isoformat(timespec="microseconds")
     ends_text = ends_at_utc.isoformat(timespec="microseconds")
     normalized_reason = reason.strip()
+    expire_due_pending_reservations()
     with database_connection() as connection:
         connection.execute("BEGIN IMMEDIATE")
         _ensure_space_exists(connection, space_id)

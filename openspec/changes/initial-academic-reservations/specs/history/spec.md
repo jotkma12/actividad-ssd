@@ -17,6 +17,14 @@ El sistema SHALL registrar cada creación, modificación, activación, desactiva
 - **WHEN** una reserva es aprobada, rechazada o cancelada
 - **THEN** el sistema registra quién tomó la decisión, cuándo ocurrió y el estado resultante
 
+#### Scenario: Registrar vencimiento automático
+- **WHEN** una solicitud pendiente vence al llegar a su hora de inicio
+- **THEN** el sistema registra el vencimiento como una acción del sistema, el momento, el estado resultante y el motivo
+
+#### Scenario: Registrar decisión sobre un cambio de horario
+- **WHEN** un aprobador autoriza o rechaza un cambio de una reserva aprobada
+- **THEN** el sistema registra actor, momento, resultado y los intervalos anterior y propuesto
+
 ### Requirement: Conservar motivos de decisiones
 El sistema SHALL incluir en el evento el motivo proporcionado para un rechazo o una cancelación cuando corresponda.
 
