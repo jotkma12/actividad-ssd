@@ -28,9 +28,9 @@
 
 ## 5. Modelo de reservas (depende de usuarios, permisos, espacios y políticas)
 
-- [ ] 5.1 Implementar persistencia y consulta de reservas con los estados pendiente, aprobada, rechazada, cancelada y finalizada; verificar estado inicial según la política y conservación de estados terminales.
-- [ ] 5.2 Implementar cancelaciones por solicitante y administrador con los plazos y motivos definidos; verificar casos permitidos, denegados y conservación del registro.
-- [ ] 5.3 Agregar pruebas unitarias y documentación del ciclo de reserva; verificar transiciones de cancelación y finalización.
+- [x] 5.1 Implementar persistencia y consulta de reservas con los estados pendiente, aprobada, rechazada, cancelada y finalizada; verificar estado inicial según la política y conservación de estados terminales.
+- [x] 5.2 Implementar cancelaciones por solicitante y administrador con los plazos y motivos definidos; verificar casos permitidos, denegados y conservación del registro.
+- [x] 5.3 Agregar pruebas unitarias y documentación del ciclo de reserva; verificar transiciones de cancelación y finalización.
 
 ## 6. Disponibilidad (depende del modelo de reservas, espacios y mantenimientos)
 

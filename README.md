@@ -34,7 +34,11 @@ Los bloqueos de mantenimiento se consultan en `GET /spaces/{id}/maintenance-bloc
 
 ### Políticas de reserva
 
-El validador compartido `backend.politicas.validation.validate_reservation_interval` interpreta horas sin zona como hora local de `America/Bogota`, valida bloques de 30 minutos, permite reservas de lunes a sábado entre las 07:00 y las 21:00 y exige entre 24 horas y 30 días de anticipación. No aplica un máximo independiente de duración. La cancelación por el solicitante de una reserva aprobada está permitida hasta dos horas antes del inicio, según la política documentada; su operación se implementará con el ciclo de reservas.
+El validador compartido `backend.politicas.validation.validate_reservation_interval` interpreta horas sin zona como hora local de `America/Bogota`, valida bloques de 30 minutos, permite reservas de lunes a sábado entre las 07:00 y las 21:00 y exige entre 24 horas y 30 días de anticipación. No aplica un máximo independiente de duración. La cancelación por el solicitante de una reserva aprobada está permitida hasta dos horas antes del inicio.
+
+### Ciclo de reservas
+
+Las reservas se conservan con estados `pending`, `approved`, `rejected`, `cancelled` o `finished`. `GET /reservations` y `GET /reservations/{id}` muestran los registros permitidos para el rol: el administrador consulta todos, el solicitante los propios y el aprobador los de espacios asignados. Al consultar, las reservas aprobadas cuyo fin ya pasó se marcan como finalizadas. Se puede cancelar con `POST /reservations/{id}/cancel`: el solicitante cancela sus pendientes antes de resolverlas y las aprobadas hasta dos horas antes; el administrador puede cancelar pendientes o aprobadas indicando un motivo. El motivo del solicitante es opcional. El servicio interno `backend.reservas.service.create_reservation` conserva una reserva con el estado inicial determinado por la configuración vigente del espacio; la solicitud pública se integrará en el siguiente punto de implementación.
 
 ## Frontend
 

@@ -39,7 +39,7 @@ def test_startup_migrates_empty_sqlite_database(tmp_path, monkeypatch):
     assert database_path.is_file()
 
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
         assert _schema_tables(connection) == EXPECTED_TABLES
         assert {row[1] for row in connection.execute("PRAGMA table_info(users)")} >= {
             "full_name",
@@ -48,6 +48,9 @@ def test_startup_migrates_empty_sqlite_database(tmp_path, monkeypatch):
             "password_hash",
             "role",
             "is_active",
+        }
+        assert "cancellation_reason" in {
+            row[1] for row in connection.execute("PRAGMA table_info(reservations)")
         }
 
 
@@ -59,7 +62,7 @@ def test_migration_updates_preexisting_empty_database(tmp_path, monkeypatch):
     initialize_database()
 
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
         assert _schema_tables(connection) == EXPECTED_TABLES
 
 
@@ -116,11 +119,17 @@ def test_user_migration_preserves_existing_reservation_references(tmp_path, monk
     initialize_database()
 
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
         assert connection.execute(
             "SELECT institutional_email, identification FROM users WHERE id = 1"
         ).fetchone() == ("admin@universidad.edu.co", "A-1")
         assert connection.execute(
             "SELECT user_id FROM reservations WHERE id = 1"
         ).fetchone() == (1,)
+        assert connection.execute(
+            "SELECT cancellation_reason FROM reservations WHERE id = 1"
+        ).fetchone() == (None,)
+        assert "cancellation_reason" in {
+            row[1] for row in connection.execute("PRAGMA table_info(reservations)")
+        }
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
