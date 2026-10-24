@@ -45,10 +45,8 @@ No se necesita instalar SQLite por separado: Python incluye el módulo que usa e
 
 ### 1. Clonar el repositorio
 
-Sustituye `<URL_DEL_REPOSITORIO>` por la URL real del repositorio:
-
 ```sh
-git clone <URL_DEL_REPOSITORIO>
+git clone https://github.com/jotkma12/actividad-ssd.git
 cd actividad-ssd
 ```
 
