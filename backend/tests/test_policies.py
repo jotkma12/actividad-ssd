@@ -5,6 +5,7 @@ import pytest
 from backend.politicas.validation import (
     LOCAL_TIMEZONE,
     ReservationPolicyError,
+    validate_consecutive_reservation_limit,
     validate_reservation_interval,
 )
 from backend.politicas.approval import initial_reservation_status
@@ -13,24 +14,53 @@ from backend.politicas.approval import initial_reservation_status
 REQUESTED_AT = datetime(2030, 1, 6, 7, 0, tzinfo=LOCAL_TIMEZONE)
 
 
-def test_validates_five_hour_reservation_without_a_duration_cap():
+def test_consecutive_limit_accepts_exactly_four_hours():
+    validate_consecutive_reservation_limit(
+        datetime(2030, 1, 7, 7, 0), datetime(2030, 1, 7, 11, 0), []
+    )
+
+
+def test_consecutive_limit_rejects_single_interval_over_four_hours():
+    with pytest.raises(ReservationPolicyError, match="cuatro horas"):
+        validate_consecutive_reservation_limit(
+            datetime(2030, 1, 7, 7, 0), datetime(2030, 1, 7, 11, 30), []
+        )
+
+
+def test_consecutive_limit_accumulates_touching_active_intervals():
+    # Existing intervals may come from both pending and approved records.
+    with pytest.raises(ReservationPolicyError, match="cuatro horas"):
+        validate_consecutive_reservation_limit(
+            datetime(2030, 1, 7, 10, 0),
+            datetime(2030, 1, 7, 12, 0),
+            [
+                (datetime(2030, 1, 7, 7, 0), datetime(2030, 1, 7, 9, 0)),
+                (datetime(2030, 1, 7, 9, 0), datetime(2030, 1, 7, 10, 0)),
+            ],
+        )
+
+
+def test_consecutive_limit_resets_after_a_pause():
+    validate_consecutive_reservation_limit(
+        datetime(2030, 1, 7, 12, 0),
+        datetime(2030, 1, 7, 14, 0),
+        [(datetime(2030, 1, 7, 7, 0), datetime(2030, 1, 7, 11, 0))],
+    )
+
+
+def test_rejects_five_hour_reservation_under_consecutive_limit():
     starts_at = datetime(2030, 1, 7, 7, 0)
     ends_at = datetime(2030, 1, 7, 12, 0)
 
-    normalized_start, normalized_end = validate_reservation_interval(
-        starts_at, ends_at, requested_at=REQUESTED_AT
-    )
-
-    assert normalized_start == datetime(2030, 1, 7, 12, 0, tzinfo=timezone.utc)
-    assert normalized_end == datetime(2030, 1, 7, 17, 0, tzinfo=timezone.utc)
+    with pytest.raises(ReservationPolicyError, match="cuatro horas"):
+        validate_consecutive_reservation_limit(starts_at, ends_at, [])
 
 
-def test_accepts_full_allowed_day_without_a_duration_cap():
-    validate_reservation_interval(
-        datetime(2030, 1, 7, 7, 0),
-        datetime(2030, 1, 7, 21, 0),
-        requested_at=REQUESTED_AT,
-    )
+def test_rejects_full_allowed_day_under_consecutive_limit():
+    with pytest.raises(ReservationPolicyError, match="cuatro horas"):
+        validate_consecutive_reservation_limit(
+            datetime(2030, 1, 7, 7, 0), datetime(2030, 1, 7, 21, 0), []
+        )
 
 
 @pytest.mark.parametrize(

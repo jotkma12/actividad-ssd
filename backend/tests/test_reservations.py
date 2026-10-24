@@ -195,6 +195,140 @@ def test_service_persists_and_queries_initial_state_from_space_policy(reservatio
     assert [row["id"] for row in own_rows] == [pending["id"]]
 
 
+def test_creation_accumulates_pending_and_approved_reservations(reservation_api):
+    api = reservation_api
+    day_start, _, _ = _future_interval(days=10)
+    day_start = day_start.replace(hour=7)
+    first = api["client"].post(
+        "/reservations", headers=api["requester_headers"],
+        json={"space_id": api["space"]["id"], "starts_at": day_start.isoformat(),
+              "ends_at": (day_start + timedelta(hours=2)).isoformat()},
+    )
+    assert first.status_code == 201
+    approved = api["client"].post(
+        f"/approvals/reservations/{first.json()['id']}/decision",
+        headers=api["approver_headers"], json={"decision": "approve"},
+    )
+    assert approved.status_code == 200
+
+    second_start = day_start + timedelta(hours=2)
+    second = api["client"].post(
+        "/reservations", headers=api["requester_headers"],
+        json={"space_id": api["space"]["id"], "starts_at": second_start.isoformat(),
+              "ends_at": (second_start + timedelta(hours=1)).isoformat()},
+    )
+    assert second.status_code == 201
+
+    candidate_start = second_start + timedelta(hours=1)
+    rejected = api["client"].post(
+        "/reservations", headers=api["requester_headers"],
+        json={"space_id": api["space"]["id"], "starts_at": candidate_start.isoformat(),
+              "ends_at": (candidate_start + timedelta(hours=2)).isoformat()},
+    )
+    assert rejected.status_code == 422
+    with database_connection() as connection:
+        count = connection.execute(
+            "SELECT COUNT(*) AS total FROM reservations WHERE user_id = ?",
+            (api["requester"]["id"],),
+        ).fetchone()["total"]
+    assert count == 2
+
+
+def test_creation_allows_a_pause_and_does_not_accumulate_other_spaces(reservation_api):
+    api = reservation_api
+    starts_at, _, _ = _future_interval(days=11)
+    starts_at = starts_at.replace(hour=7)
+    _insert_reservation(
+        user_id=api["requester"]["id"], space_id=api["space"]["id"],
+        status="approved", starts_at=starts_at.astimezone(timezone.utc),
+        ends_at=(starts_at + timedelta(hours=4)).astimezone(timezone.utc),
+    )
+
+    paused_start = starts_at + timedelta(hours=5)
+    paused = api["client"].post(
+        "/reservations", headers=api["requester_headers"],
+        json={"space_id": api["space"]["id"], "starts_at": paused_start.isoformat(),
+              "ends_at": (paused_start + timedelta(hours=2)).isoformat()},
+    )
+    assert paused.status_code == 201
+
+    other_space_start = paused_start + timedelta(hours=2)
+    different_space = api["client"].post(
+        "/reservations", headers=api["requester_headers"],
+        json={"space_id": api["other_space"]["id"],
+              "starts_at": other_space_start.isoformat(),
+              "ends_at": (other_space_start + timedelta(hours=3)).isoformat()},
+    )
+    assert different_space.status_code == 201
+
+
+def test_update_replaces_original_interval_and_preserves_legacy_on_rejection(
+    reservation_api,
+):
+    api = reservation_api
+    day_start, _, _ = _future_interval(days=12)
+    day_start = day_start.replace(hour=7)
+    reservation_id = _insert_reservation(
+        user_id=api["requester"]["id"], space_id=api["space"]["id"],
+        status="pending", starts_at=day_start.astimezone(timezone.utc),
+        ends_at=(day_start + timedelta(hours=3)).astimezone(timezone.utc),
+    )
+
+    replacement_start = day_start + timedelta(hours=3)
+    replacement = api["client"].put(
+        f"/reservations/{reservation_id}", headers=api["requester_headers"],
+        json={"starts_at": replacement_start.isoformat(),
+              "ends_at": (replacement_start + timedelta(hours=2)).isoformat()},
+    )
+    assert replacement.status_code == 200
+    assert replacement.json()["starts_at_utc"] == replacement_start.astimezone(
+        timezone.utc
+    ).isoformat(timespec="microseconds")
+
+    legacy_id = _insert_reservation(
+        user_id=api["requester"]["id"], space_id=api["space"]["id"],
+        status="pending", starts_at=(day_start + timedelta(hours=6)).astimezone(
+            timezone.utc
+        ), ends_at=(day_start + timedelta(hours=11)).astimezone(timezone.utc),
+    )
+    legacy_original = api["client"].get(
+        f"/reservations/{legacy_id}", headers=api["requester_headers"]
+    ).json()
+    rejected = api["client"].put(
+        f"/reservations/{legacy_id}", headers=api["requester_headers"],
+        json={"starts_at": (day_start + timedelta(hours=6)).isoformat(),
+              "ends_at": (day_start + timedelta(hours=10, minutes=30)).isoformat()},
+    )
+    assert rejected.status_code == 422
+    unchanged = api["client"].get(
+        f"/reservations/{legacy_id}", headers=api["requester_headers"]
+    ).json()
+    assert unchanged["starts_at_utc"] == legacy_original["starts_at_utc"]
+    assert unchanged["ends_at_utc"] == legacy_original["ends_at_utc"]
+
+
+def test_concurrent_touching_requests_cannot_exceed_user_limit(reservation_api):
+    api = reservation_api
+    starts_at, _, _ = _future_interval(days=13)
+    starts_at = starts_at.replace(hour=7)
+    intervals = [
+        (starts_at, starts_at + timedelta(hours=2)),
+        (starts_at + timedelta(hours=2), starts_at + timedelta(hours=5)),
+    ]
+
+    def create(interval):
+        start, end = interval
+        return api["client"].post(
+            "/reservations", headers=api["requester_headers"],
+            json={"space_id": api["space"]["id"], "starts_at": start.isoformat(),
+                  "ends_at": end.isoformat()},
+        ).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        statuses = list(workers.map(create, intervals))
+    assert sorted(statuses) == [201, 422]
+
+
 def test_api_creates_reservations_with_initial_status_and_rejects_invalid_requests(reservation_api):
     api = reservation_api
     starts_at, ends_at, _ = _future_interval()
@@ -779,6 +913,90 @@ def test_approved_change_holds_both_intervals_until_approval(reservation_api):
         space_id=api["space"]["id"], starts_at=proposed_start, ends_at=proposed_end
     )["availability"] == "occupied"
 
+
+def test_approved_change_rechecks_limit_and_preserves_original_on_excess(
+    reservation_api,
+):
+    api = reservation_api
+    proposed_start, _, _ = _future_interval(days=20)
+    proposed_start = proposed_start.replace(hour=9)
+    proposed_end = proposed_start + timedelta(hours=2)
+    original_start, original_end, _ = _future_interval(days=21)
+    original_start = original_start.replace(hour=15)
+    original_end = original_start + timedelta(hours=1)
+    reservation_id = _insert_reservation(
+        user_id=api["requester"]["id"], space_id=api["space"]["id"],
+        status="approved", starts_at=original_start.astimezone(timezone.utc),
+        ends_at=original_end.astimezone(timezone.utc),
+    )
+    requested_change = api["client"].put(
+        f"/reservations/{reservation_id}", headers=api["requester_headers"],
+        json={"starts_at": proposed_start.isoformat(),
+              "ends_at": (proposed_start + timedelta(hours=2)).isoformat()},
+    )
+    assert requested_change.status_code == 200
+    change_id = requested_change.json()["pending_change"]["id"]
+
+    # These later reservations do not overlap the proposal, but make its
+    # exactly-touching sequence exceed four hours before the approval decision.
+    _insert_reservation(
+        user_id=api["requester"]["id"], space_id=api["space"]["id"],
+        status="pending", starts_at=(proposed_start - timedelta(hours=2)).astimezone(
+            timezone.utc
+        ), ends_at=proposed_start.astimezone(timezone.utc),
+    )
+    _insert_reservation(
+        user_id=api["requester"]["id"], space_id=api["space"]["id"],
+        status="approved", starts_at=proposed_end.astimezone(timezone.utc),
+        ends_at=(proposed_end + timedelta(hours=2)).astimezone(timezone.utc),
+    )
+
+    rejected = api["client"].post(
+        f"/approvals/change-requests/{change_id}/decision",
+        headers=api["approver_headers"], json={"decision": "approve"},
+    )
+    assert rejected.status_code == 409
+    unchanged = api["client"].get(
+        f"/reservations/{reservation_id}", headers=api["requester_headers"]
+    ).json()
+    assert unchanged["status"] == "approved"
+    assert unchanged["starts_at_utc"] == original_start.astimezone(timezone.utc).isoformat()
+    assert unchanged["ends_at_utc"] == original_end.astimezone(timezone.utc).isoformat()
+    assert unchanged["pending_change"]["status"] == "pending"
+
+
+def test_approved_change_counts_proposal_instead_of_touching_original(
+    reservation_api,
+):
+    api = reservation_api
+    original_start, _, _ = _future_interval(days=22)
+    original_start = original_start.replace(hour=7)
+    original_end = original_start + timedelta(hours=3)
+    reservation_id = _insert_reservation(
+        user_id=api["requester"]["id"], space_id=api["space"]["id"],
+        status="approved", starts_at=original_start.astimezone(timezone.utc),
+        ends_at=original_end.astimezone(timezone.utc),
+    )
+    proposed_start = original_end
+    proposed_end = proposed_start + timedelta(hours=2)
+    requested_change = api["client"].put(
+        f"/reservations/{reservation_id}", headers=api["requester_headers"],
+        json={"starts_at": proposed_start.isoformat(),
+              "ends_at": proposed_end.isoformat()},
+    )
+    assert requested_change.status_code == 200
+    change_id = requested_change.json()["pending_change"]["id"]
+    approved = api["client"].post(
+        f"/approvals/change-requests/{change_id}/decision",
+        headers=api["approver_headers"], json={"decision": "approve"},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["starts_at_utc"] == proposed_start.astimezone(
+        timezone.utc
+    ).isoformat(timespec="microseconds")
+    assert approved.json()["ends_at_utc"] == proposed_end.astimezone(
+        timezone.utc
+    ).isoformat(timespec="microseconds")
 
 def test_rejected_approved_change_releases_provisional_interval(reservation_api):
     api = reservation_api

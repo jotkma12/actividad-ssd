@@ -9,6 +9,7 @@ from backend.database import database_connection
 from backend.disponibilidad.checks import availability_in_transaction
 from backend.historial.records import record_event
 from backend.politicas.approval import initial_reservation_status
+from backend.politicas.consecutive import validate_user_space_duration
 from backend.politicas.validation import validate_reservation_interval
 from backend.reservas.states import (
     cancel_pending_reservation_changes,
@@ -130,6 +131,13 @@ def create_reservation(
                 raise ReservationConflictError(
                     "El intervalo está ocupado por una reserva o bloqueado por mantenimiento"
                 )
+            validate_user_space_duration(
+                connection,
+                user_id=user_id,
+                space_id=space_id,
+                starts_at=starts_at_utc,
+                ends_at=ends_at_utc,
+            )
 
             initial_status = initial_reservation_status(
                 bool(space["requires_approval"])
@@ -325,6 +333,14 @@ def update_reservation(
                 raise ReservationConflictError(
                     "El nuevo intervalo está ocupado o bloqueado por mantenimiento"
                 )
+            validate_user_space_duration(
+                connection,
+                user_id=actor_user_id,
+                space_id=reservation["space_id"],
+                starts_at=starts_at_utc,
+                ends_at=ends_at_utc,
+                exclude_reservation_id=reservation_id,
+            )
             if status == "approved" and space["requires_approval"]:
                 existing_change = connection.execute(
                     """SELECT id FROM reservation_change_requests

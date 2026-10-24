@@ -9,6 +9,8 @@ from backend.database import database_connection
 from backend.disponibilidad.checks import availability_in_transaction
 from backend.disponibilidad.intervals import stored_utc
 from backend.historial.records import record_event
+from backend.politicas.consecutive import validate_user_space_duration
+from backend.politicas.validation import ReservationPolicyError
 from backend.reservas.service import get_reservation_record
 from backend.reservas.states import (
     EXPIRATION_REASON,
@@ -216,6 +218,17 @@ def decide_reservation_change(
             )
             if availability != "available":
                 raise ApprovalConflictError
+            try:
+                validate_user_space_duration(
+                    connection,
+                    user_id=change["user_id"],
+                    space_id=change["space_id"],
+                    starts_at=stored_utc(change["starts_at_utc"]),
+                    ends_at=stored_utc(change["ends_at_utc"]),
+                    exclude_reservation_id=change["reservation_id"],
+                )
+            except ReservationPolicyError as error:
+                raise ApprovalConflictError from error
             connection.execute(
                 """UPDATE reservations SET starts_at_utc = ?, ends_at_utc = ?
                    WHERE id = ? AND status = 'approved'""",

@@ -12,10 +12,69 @@ MAXIMUM_ADVANCE = timedelta(days=30)
 OPENING_TIME = time(7, 0)
 CLOSING_TIME = time(21, 0)
 BLOCK_MINUTES = 30
+MAX_CONSECUTIVE_DURATION = timedelta(hours=4)
 
 
 class ReservationPolicyError(ValueError):
     """A reservation interval violates a confirmed business policy."""
+
+
+def validate_consecutive_reservation_limit(
+    starts_at: datetime,
+    ends_at: datetime,
+    existing_intervals: list[tuple[datetime, datetime]],
+) -> None:
+    """Reject a candidate whose exactly-touching interval sequence exceeds 4h.
+
+    ``existing_intervals`` must contain only the relevant user's active
+    reservations for the same space, normalized to aware datetimes. The
+    candidate is measured only against the sequence that contains it, so
+    unrelated legacy sequences over the limit do not block a separate slot.
+    """
+    candidate_start = _as_local(starts_at, "El inicio").astimezone(timezone.utc)
+    candidate_end = _as_local(ends_at, "El fin").astimezone(timezone.utc)
+    if candidate_start >= candidate_end:
+        raise ReservationPolicyError("El inicio debe ser anterior al fin")
+
+    intervals = [
+        (candidate_start, candidate_end, True),
+        *(
+            (
+                _as_local(start, "El inicio existente").astimezone(timezone.utc),
+                _as_local(end, "El fin existente").astimezone(timezone.utc),
+                False,
+            )
+            for start, end in existing_intervals
+        ),
+    ]
+    intervals.sort(key=lambda interval: (interval[0], interval[1]))
+
+    sequence_start: datetime | None = None
+    sequence_end: datetime | None = None
+    candidate_in_sequence = False
+
+    def check_candidate_sequence() -> None:
+        if (
+            candidate_in_sequence
+            and sequence_start is not None
+            and sequence_end is not None
+            and sequence_end - sequence_start > MAX_CONSECUTIVE_DURATION
+        ):
+            raise ReservationPolicyError(
+                "El tiempo consecutivo reservado no puede superar cuatro horas"
+            )
+
+    for interval_start, interval_end, is_candidate in intervals:
+        if sequence_end != interval_start:
+            check_candidate_sequence()
+            sequence_start = interval_start
+            sequence_end = interval_end
+            candidate_in_sequence = is_candidate
+        else:
+            sequence_end = interval_end
+            candidate_in_sequence = candidate_in_sequence or is_candidate
+
+    check_candidate_sequence()
 
 
 def _as_local(value: datetime, field: str) -> datetime:
