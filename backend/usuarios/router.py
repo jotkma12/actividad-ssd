@@ -13,6 +13,7 @@ from backend.usuarios.dependencies import (
 from backend.usuarios.permissions import Principal
 from backend.usuarios.schemas import (
     AccountCreate,
+    AccountProfileUpdate,
     AccountRoleUpdate,
     AccountStatusResponse,
     AccountStatusUpdate,
@@ -28,10 +29,12 @@ from backend.usuarios.service import (
     authenticate,
     create_account,
     list_accounts,
+    list_space_approvers,
     remove_approver,
     revoke_session,
     set_account_role,
     set_account_status,
+    update_account_profile,
 )
 
 
@@ -93,6 +96,28 @@ def get_users(
     return [UserResponse(**user) for user in list_accounts()]
 
 
+@router.put("/users/{user_id}", response_model=UserResponse, tags=["users"])
+def edit_user_profile(
+    user_id: int,
+    payload: AccountProfileUpdate,
+    principal: Annotated[Principal, Depends(require_administrator)],
+) -> UserResponse:
+    try:
+        return UserResponse(
+            **update_account_profile(
+                user_id,
+                actor_user_id=principal.user_id,
+                **payload.model_dump(),
+            )
+        )
+    except AccountNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cuenta no encontrada") from None
+    except AccountConflictError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from None
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from None
+
+
 @router.patch(
     "/users/{user_id}/status",
     response_model=AccountStatusResponse,
@@ -147,6 +172,21 @@ def add_space_approver(
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from None
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/permissions/spaces/{space_id}/approvers",
+    response_model=list[UserResponse],
+    tags=["permissions"],
+)
+def get_space_approvers(
+    space_id: int,
+    _principal: Annotated[Principal, Depends(require_administrator)],
+) -> list[UserResponse]:
+    try:
+        return [UserResponse(**user) for user in list_space_approvers(space_id)]
+    except AccountNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from None
 
 
 @router.delete(

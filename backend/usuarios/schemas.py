@@ -50,6 +50,24 @@ class AccountCreate(BaseModel):
         return value
 
 
+class AccountProfileUpdate(BaseModel):
+    full_name: str = Field(min_length=1, max_length=200)
+    institutional_email: str
+    identification: str = Field(min_length=1, max_length=100)
+
+    @field_validator("full_name", "identification")
+    @classmethod
+    def strip_required_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("El campo es obligatorio")
+        return value
+
+    @field_validator("institutional_email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return normalize_institutional_email(value)
+
 class AccountStatusUpdate(BaseModel):
     is_active: bool
 

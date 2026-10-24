@@ -54,11 +54,33 @@ Una persona con sesión activa puede consultar `GET /availability/spaces/{id}` c
 
 ## Frontend
 
+En una terminal, inicia FastAPI desde la raíz del proyecto:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload
+```
+
+En otra terminal, inicia React:
+
 ```powershell
 cd frontend
 npm install
 npm run dev
 ```
+
+Vite reenvía `/api` a FastAPI en `http://127.0.0.1:8000`; se puede cambiar la URL para otro entorno con `VITE_API_BASE_URL`. El token de sesión se conserva solo mientras la página está abierta; al recargar, se solicita iniciar sesión otra vez.
+
+Con una cuenta de solicitante, usa **Consultar disponibilidad** para seleccionar fecha y horas. Solo los intervalos que el servicio confirme como disponibles ofrecen la acción **Solicitar reserva**. Las solicitudes y sus estados se consultan en **Mis reservas**; desde allí se pueden modificar o cancelar cuando el estado y el plazo lo permiten. El servidor vuelve a validar cada operación y la interfaz muestra los estados y errores que devuelve.
+
+### Pruebas de interfaz
+
+Las pruebas Playwright arrancan una instancia aislada de FastAPI y usan una base SQLite temporal. Requieren Google Chrome instalado y se ejecutan desde `frontend`:
+
+```powershell
+npm run test:e2e
+```
+
+El servidor y la base temporales se cierran o eliminan al terminar las pruebas.
 
 ## Pruebas
 

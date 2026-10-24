@@ -181,6 +181,105 @@ def test_admin_account_creation_rejects_public_users_and_invalid_data(client):
     ).status_code == 409
 
 
+def test_admin_updates_account_profile_transactionally_and_records_history(client):
+    admin_headers = _bootstrap_admin(client)
+    first = _create_account(client, admin_headers).json()
+    second = _create_account(
+        client,
+        admin_headers,
+        institutional_email="otra@universidad.edu.co",
+        identification="DOC-002",
+    ).json()
+
+    updated = client.put(
+        f"/users/{first['id']}",
+        headers=admin_headers,
+        json={
+            "full_name": "  Docente Actualizado  ",
+            "institutional_email": "DOCENTE.NUEVO@UNIVERSIDAD.EDU.CO",
+            "identification": " DOC-101 ",
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["full_name"] == "Docente Actualizado"
+    assert updated.json()["institutional_email"] == "docente.nuevo@universidad.edu.co"
+    assert updated.json()["identification"] == "DOC-101"
+    assert updated.json()["id"] == first["id"]
+
+    assert client.put(
+        f"/users/{first['id']}",
+        headers=admin_headers,
+        json={
+            "full_name": "Cambio rechazado",
+            "institutional_email": "otra@universidad.edu.co",
+            "identification": "DOC-102",
+        },
+    ).status_code == 409
+    assert client.put(
+        f"/users/{first['id']}",
+        headers=admin_headers,
+        json={
+            "full_name": "Cambio rechazado",
+            "institutional_email": "persona@otro.edu.co",
+            "identification": "DOC-102",
+        },
+    ).status_code == 422
+    assert client.put(
+        f"/users/{first['id']}",
+        headers=admin_headers,
+        json={
+            "full_name": "Cambio rechazado",
+            "institutional_email": "tercero@universidad.edu.co",
+            "identification": "DOC-002",
+        },
+    ).status_code == 409
+    assert client.put(
+        f"/users/{first['id']}",
+        headers=admin_headers,
+        json={
+            "full_name": "   ",
+            "institutional_email": "tercero@universidad.edu.co",
+            "identification": "DOC-103",
+        },
+    ).status_code == 422
+
+    with database_connection() as connection:
+        profile = connection.execute(
+            "SELECT full_name, institutional_email, identification FROM users WHERE id = ?",
+            (first["id"],),
+        ).fetchone()
+        events = connection.execute(
+            """SELECT actor_user_id, action FROM history_events
+               WHERE entity_type = 'user' AND entity_id = ? ORDER BY id""",
+            (first["id"],),
+        ).fetchall()
+    assert tuple(profile) == (
+        "Docente Actualizado", "docente.nuevo@universidad.edu.co", "DOC-101"
+    )
+    assert [tuple(event) for event in events] == [
+        (1, "user_created"), (1, "user_profile_updated")
+    ]
+
+    assert client.patch(
+        f"/users/{first['id']}/status",
+        headers=admin_headers,
+        json={"is_active": True},
+    ).status_code == 200
+    requester_login = _login(client, "docente.nuevo@universidad.edu.co", "una-clave-larga")
+    requester_headers = {
+        "Authorization": f"Bearer {requester_login.json()['access_token']}"
+    }
+    assert client.put(
+        f"/users/{second['id']}",
+        headers=requester_headers,
+        json={
+            "full_name": "No autorizado",
+            "institutional_email": "otra@universidad.edu.co",
+            "identification": "DOC-002",
+        },
+    ).status_code == 403
+
+
 def test_non_admin_cannot_create_or_manage_accounts(client):
     admin_headers = _bootstrap_admin(client)
     created = _create_account(client, admin_headers)
@@ -301,6 +400,11 @@ def test_admin_role_changes_and_assigns_only_approver_accounts(client):
     assert client.put(
         f"/permissions/spaces/1/approvers/{approver['id']}", headers=admin_headers
     ).status_code == 204
+    assignments = client.get(
+        "/permissions/spaces/1/approvers", headers=admin_headers
+    )
+    assert assignments.status_code == 200
+    assert [account["id"] for account in assignments.json()] == [approver["id"]]
     assert get_approver_space_ids(approver["id"]) == {1}
     assert client.put(
         f"/permissions/spaces/1/approvers/{requester['id']}", headers=admin_headers
@@ -319,6 +423,9 @@ def test_admin_role_changes_and_assigns_only_approver_accounts(client):
     assert client.put(
         f"/permissions/spaces/{1}/approvers/{approver['id']}",
         headers=requester_headers,
+    ).status_code == 403
+    assert client.get(
+        "/permissions/spaces/1/approvers", headers=requester_headers
     ).status_code == 403
     assert client.delete(
         f"/permissions/spaces/1/approvers/{approver['id']}", headers=admin_headers

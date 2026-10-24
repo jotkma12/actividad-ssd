@@ -197,6 +197,94 @@ def list_accounts() -> list[dict]:
         return [_user_dict(row) for row in rows]
 
 
+def update_account_profile(
+    user_id: int,
+    *,
+    actor_user_id: int,
+    full_name: str,
+    institutional_email: str,
+    identification: str,
+) -> dict:
+    full_name = full_name.strip()
+    identification = identification.strip()
+    email = normalize_institutional_email(institutional_email)
+    if not full_name or not identification:
+        raise ValueError("El nombre y la identificación son obligatorios")
+
+    with database_connection() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        current_row = connection.execute(
+            """SELECT id, full_name, institutional_email, identification, role,
+                      is_active, created_at_utc
+               FROM users WHERE id = ?""",
+            (user_id,),
+        ).fetchone()
+        if current_row is None:
+            raise AccountNotFoundError
+
+        duplicate = connection.execute(
+            """SELECT institutional_email, identification FROM users
+               WHERE id != ? AND (institutional_email = ? OR identification = ?)""",
+            (user_id, email, identification),
+        ).fetchone()
+        if duplicate:
+            if duplicate["institutional_email"] == email:
+                raise AccountConflictError("El correo institucional ya está registrado")
+            raise AccountConflictError("La identificación ya está registrada")
+
+        current = _user_dict(current_row)
+        old_values = {
+            "full_name": current["full_name"],
+            "institutional_email": current["institutional_email"],
+            "identification": current["identification"],
+        }
+        new_values = {
+            "full_name": full_name,
+            "institutional_email": email,
+            "identification": identification,
+        }
+        if old_values != new_values:
+            connection.execute(
+                """UPDATE users
+                   SET full_name = ?, institutional_email = ?, identification = ?
+                   WHERE id = ?""",
+                (full_name, email, identification, user_id),
+            )
+            record_event(
+                connection,
+                actor_user_id=actor_user_id,
+                entity_type="user",
+                entity_id=user_id,
+                action="user_profile_updated",
+                old_values=old_values,
+                new_values=new_values,
+            )
+        updated = connection.execute(
+            """SELECT id, full_name, institutional_email, identification, role,
+                      is_active, created_at_utc
+               FROM users WHERE id = ?""",
+            (user_id,),
+        ).fetchone()
+        return _user_dict(updated)
+
+
+def list_space_approvers(space_id: int) -> list[dict]:
+    with database_connection() as connection:
+        if connection.execute(
+            "SELECT 1 FROM spaces WHERE id = ?", (space_id,)
+        ).fetchone() is None:
+            raise AccountNotFoundError("El espacio no existe")
+        rows = connection.execute(
+            """SELECT u.id, u.full_name, u.institutional_email, u.identification,
+                      u.role, u.is_active, u.created_at_utc
+               FROM space_approvers AS sa
+               JOIN users AS u ON u.id = sa.approver_user_id
+               WHERE sa.space_id = ? ORDER BY u.full_name COLLATE NOCASE, u.id""",
+            (space_id,),
+        ).fetchall()
+        return [_user_dict(row) for row in rows]
+
+
 def set_account_status(
     user_id: int, is_active: bool, *, actor_user_id: int
 ) -> tuple[dict, int]:
