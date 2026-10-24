@@ -26,6 +26,12 @@ La aplicación no crea administradores al iniciar. Para configurar explícitamen
 
 El comando solicita nombre completo, correo `@universidad.edu.co` y contraseña. Solo crea la cuenta si todavía no existe un administrador. Todas las contraseñas deben tener al menos 12 caracteres; no se exige una combinación concreta de letras, números o símbolos. Las cuentas ordinarias se crean por `POST /users` con una sesión de administrador y empiezan inactivas. Un administrador puede activarlas, desactivarlas, cambiar roles y asignar aprobadores a espacios. La API documentada en `/docs` ofrece `POST /auth/login` y las operaciones protegidas usan `Authorization: Bearer <token>`.
 
+### Espacios académicos
+
+`GET /spaces` y `GET /spaces/{id}` consultan espacios activos e inactivos. Solo un administrador puede crearlos (`POST /spaces`), editar sus datos (`PUT /spaces/{id}`) o cambiar su estado (`PATCH /spaces/{id}/status`). Al desactivar un espacio, la respuesta indica cuántas reservas futuras pendientes o aprobadas debe revisar el administrador; no se cancelan automáticamente. Cada espacio requiere una configuración de aprobación al crearse.
+
+Los bloqueos de mantenimiento se consultan en `GET /spaces/{id}/maintenance-blocks`; un administrador puede crearlos con `POST`, modificarlos con `PUT` y retirarlos con `DELETE` en esa misma ruta. Si el intervalo se cruza con una reserva pendiente o aprobada, la API rechaza la operación e identifica las reservas que deben resolverse; una modificación fallida conserva el bloqueo existente. Cuando resolver el conflicto requiere cancelar o cambiar una reserva, el administrador contacta manualmente al solicitante por un canal institucional, como una llamada o un mensaje. El sistema no envía correos automáticos ni integra servicios de notificación.
+
 ## Frontend
 
 ```powershell

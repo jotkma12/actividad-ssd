@@ -45,6 +45,12 @@ Las demás cuentas se crearán administrativamente, solo aceptarán correos term
 
 Las operaciones que cambian entidades generarán eventos vinculados a actor, entidad y momento. Las cuentas y reservas se desactivarán o cambiarán de estado en vez de borrarse, para conservar las relaciones históricas. El acceso al historial seguirá el permiso de consulta de la entidad relacionada.
 
+### Mantenimientos y comunicación con solicitantes
+
+Solo un administrador podrá crear, modificar o retirar bloqueos de mantenimiento. Si el intervalo propuesto para crear o modificar un bloqueo se cruza con una reserva pendiente o aprobada, el sistema rechazará la operación e identificará las reservas afectadas; el bloqueo no se guardará mientras persista cualquiera de esos conflictos. El administrador deberá resolver primero esas reservas.
+
+Cuando resolver un conflicto requiera cancelar o cambiar una reserva, el administrador será responsable de contactar manualmente a la persona solicitante. Podrá usar un canal institucional, por ejemplo una llamada o un mensaje. El sistema no enviará correos automáticos ni integrará servicios de notificación; no se fija un canal obligatorio.
+
 ### Alternativas descartadas
 
 - **Microservicios:** el plan elige una aplicación modular por el alcance individual y la coordinación más sencilla.
@@ -65,8 +71,8 @@ La base y la identidad preceden a la administración de espacios. El modelo y lo
 - [Reglas de calendario pueden interpretarse con otra zona horaria] → Evaluar y mostrar días/horas en `America/Bogota`, normalizando los instantes almacenados a UTC.
 - [Una cuenta desactivada puede tener reservas futuras] → Decisión confirmada: conservarlas para revisión del administrador, sin cancelación automática.
 - [Un cambio de una reserva aprobada puede dejar ocupaciones ambiguas mientras espera nueva aprobación] → No programar el flujo hasta resolver la pregunta de la siguiente sección.
-- [El plan excluye avisos automáticos por correo] → Tratar cualquier aviso derivado de la desactivación de un espacio como procedimiento manual fuera del producto, hasta definir su canal.
-- [Un bloqueo de mantenimiento podría coincidir con reservas existentes] → Propuesta para revisión: rechazar la creación o modificación del bloqueo cuando se cruce con reservas pendientes o aprobadas, hasta resolver cada reserva afectada.
+- [El plan excluye avisos automáticos por correo] → Decisión confirmada: el administrador contacta manualmente a los solicitantes afectados por bloqueos de mantenimiento; no se integran servicios de notificación ni se fija un canal obligatorio.
+- [Un bloqueo de mantenimiento podría coincidir con reservas existentes] → Decisión confirmada: rechazar la creación o modificación hasta resolver todas las reservas pendientes o aprobadas que se crucen con el intervalo.
 
 ## Migration Plan
 
@@ -75,7 +81,6 @@ No hay una aplicación ni datos funcionales que migrar en esta etapa. Durante un
 ## Open Questions
 
 - ¿Se confirman los valores propuestos de anticipación (mínimo 24 horas y máximo 30 días), horario (lunes a sábado, 07:00–21:00) y cancelación aprobada (hasta 2 horas antes)? No se propone máximo de duración; el plan no determina los otros valores.
-- Cuando un bloqueo de mantenimiento se cruza con reservas pendientes o aprobadas, ¿se debe rechazar el bloqueo hasta resolver esas reservas? Se propone ese comportamiento para impedir que una reserva vigente permanezca dentro de un período bloqueado.
 - Cuando una solicitud pendiente llega a su hora de inicio o de fin sin decisión, ¿se cancela, se rechaza o permanece pendiente? El plan define el bloqueo temporal, pero no el vencimiento de una solicitud sin resolver.
 - Cuando se modifica una reserva aprobada en un espacio que requiere aprobación, ¿la reserva original continúa ocupando su horario mientras se decide el cambio, o se libera al enviar la modificación? ¿Qué intervalo ocupa la modificación y qué ocurre con la reserva si se rechaza el cambio?
 - Cuando se desactiva un espacio con reservas futuras, ¿qué canal manual y qué responsable se usarán para notificar a los solicitantes? El plan excluye avisos automáticos por correo y no define un canal alternativo.

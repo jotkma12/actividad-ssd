@@ -15,9 +15,9 @@
 
 ## 3. Espacios y mantenimiento (depende de usuarios y permisos)
 
-- [ ] 3.1 Implementar alta, consulta, edición y desactivación de espacios; verificar datos requeridos, conservación histórica y rechazo de nuevas reservas en espacios inactivos.
-- [ ] 3.2 Implementar gestión de bloqueos de mantenimiento; confirmar la regla ante cruces con reservas y el procedimiento de aviso manual antes de programar los casos afectados.
-- [ ] 3.3 Agregar pruebas de integración y documentación de espacios y mantenimientos; verificar que se revisen las reservas futuras al desactivar un espacio.
+- [x] 3.1 Implementar alta, consulta, edición y desactivación de espacios; verificar datos requeridos, conservación histórica y rechazo de nuevas reservas en espacios inactivos.
+- [x] 3.2 Implementar gestión de bloqueos de mantenimiento; restringirla a administradores, rechazar altas o modificaciones que se crucen con reservas pendientes o aprobadas, y dejar el contacto a solicitantes afectados como responsabilidad manual del administrador sin notificaciones automáticas.
+- [x] 3.3 Agregar pruebas de integración y documentación de espacios y mantenimientos; verificar que se revisen las reservas futuras al desactivar un espacio.
 
 ## 4. Políticas (depende de espacios)
 
