@@ -7,11 +7,11 @@
 
 ## 2. Usuarios y permisos (depende de la base del proyecto)
 
-- [ ] 2.1 Confirmar dominio institucional, estado inicial de cuentas nuevas y tratamiento de reservas futuras al desactivar cuentas; verificar que las decisiones estén aprobadas y reflejadas en los escenarios.
-- [ ] 2.2 Implementar autenticación y creación administrativa de cuentas; verificar datos válidos, duplicados, datos ausentes y rechazo del registro público.
-- [ ] 2.3 Implementar activación y desactivación de cuentas conforme a las decisiones confirmadas; verificar acceso denegado a cuentas inactivas y conservación del historial.
-- [ ] 2.4 Implementar roles principales, matriz de permisos y asignaciones de aprobadores por espacio; verificar acciones permitidas y denegadas para los tres roles.
-- [ ] 2.5 Agregar pruebas unitarias y documentación de cuentas y permisos; verificar cobertura de sesión, estado de cuenta, propiedad de reservas y asignación de espacios.
+- [x] 2.1 Confirmar dominio institucional, estado inicial de cuentas nuevas y tratamiento de reservas futuras al desactivar cuentas; verificar que las decisiones estén aprobadas y reflejadas en los escenarios.
+- [x] 2.2 Implementar autenticación, configuración inicial de un único primer administrador activo y creación administrativa de cuentas inactivas; verificar dominio institucional, contraseña mínima de 12 caracteres, datos válidos, duplicados, datos ausentes, rechazo del registro público y prevención de un segundo administrador inicial.
+- [x] 2.3 Implementar activación y desactivación de cuentas conforme a las decisiones confirmadas; verificar acceso denegado a cuentas inactivas y conservación del historial.
+- [x] 2.4 Implementar roles principales, matriz de permisos y asignaciones de aprobadores por espacio; verificar acciones permitidas y denegadas para los tres roles.
+- [x] 2.5 Agregar pruebas unitarias y documentación de cuentas y permisos; verificar cobertura de sesión, estado de cuenta, propiedad de reservas y asignación de espacios.
 
 ## 3. Espacios y mantenimiento (depende de usuarios y permisos)
 

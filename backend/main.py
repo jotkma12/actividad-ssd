@@ -6,6 +6,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 
 from backend.database import initialize_database
+from backend.usuarios.router import router as users_router
 
 
 @asynccontextmanager
@@ -18,6 +19,7 @@ app = FastAPI(
     title="Sistema de reservas académicas",
     lifespan=lifespan,
 )
+app.include_router(users_router)
 
 
 @app.get("/health", tags=["system"])

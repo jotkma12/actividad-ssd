@@ -2,7 +2,9 @@
 
 import os
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
 from backend.migrations import apply_migrations
 
@@ -30,3 +32,19 @@ def initialize_database() -> Path:
         apply_migrations(connection)
 
     return database_path
+
+
+@contextmanager
+def database_connection() -> Iterator[sqlite3.Connection]:
+    """Open a configured SQLite connection with foreign keys enabled."""
+    connection = sqlite3.connect(get_database_path(), timeout=5.0)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()

@@ -37,7 +37,9 @@ La interfaz y las reglas de negocio expresarán los horarios en `America/Bogota`
 
 ### Cuentas y permisos
 
-Las cuentas se crearán administrativamente y cada una tendrá un rol principal. Los permisos se validarán en el servidor en cada operación protegida; ocultar una acción en React no sustituye esta validación. Los aprobadores se limitarán a espacios asignados y no podrán decidir sus propias solicitudes.
+La configuración inicial del sistema permitirá crear un único primer administrador activo con nombre completo, correo terminado en `@universidad.edu.co` y contraseña válida. Solo estará disponible si todavía no existe un administrador; si ya existe uno, la configuración rechazará el intento y no creará otra cuenta inicial. El sistema no aprovisionará administradores iniciales automáticamente.
+
+Las demás cuentas se crearán administrativamente, solo aceptarán correos terminados en `@universidad.edu.co` y comenzarán inactivas. Solo un administrador podrá activarlas. Todas las contraseñas, incluida la del administrador inicial, tendrán al menos 12 caracteres, sin requisitos de combinación de mayúsculas, minúsculas, números o símbolos. La desactivación no cancela reservas futuras: estas se conservan para que el administrador decida si las mantiene o las cancela; una cancelación administrativa debe registrar el motivo. Cada cuenta tendrá un rol principal. Los permisos se validarán en el servidor en cada operación protegida; ocultar una acción en React no sustituye esta validación. Los aprobadores se limitarán a espacios asignados y no podrán decidir sus propias solicitudes.
 
 ### Historial
 
@@ -61,7 +63,7 @@ La base y la identidad preceden a la administración de espacios. El modelo y lo
 
 - [SQLite serializa las escrituras y tiene límites de concurrencia] → Mantener la transacción corta; configurar espera o devolver un mensaje claro; evaluar PostgreSQL solo si el crecimiento lo exige.
 - [Reglas de calendario pueden interpretarse con otra zona horaria] → Evaluar y mostrar días/horas en `America/Bogota`, normalizando los instantes almacenados a UTC.
-- [Una cuenta desactivada puede tener reservas futuras] → Conservarlas y exigir que el administrador las revise, sin cancelación automática.
+- [Una cuenta desactivada puede tener reservas futuras] → Decisión confirmada: conservarlas para revisión del administrador, sin cancelación automática.
 - [Un cambio de una reserva aprobada puede dejar ocupaciones ambiguas mientras espera nueva aprobación] → No programar el flujo hasta resolver la pregunta de la siguiente sección.
 - [El plan excluye avisos automáticos por correo] → Tratar cualquier aviso derivado de la desactivación de un espacio como procedimiento manual fuera del producto, hasta definir su canal.
 - [Un bloqueo de mantenimiento podría coincidir con reservas existentes] → Propuesta para revisión: rechazar la creación o modificación del bloqueo cuando se cruce con reservas pendientes o aprobadas, hasta resolver cada reserva afectada.
@@ -74,9 +76,6 @@ No hay una aplicación ni datos funcionales que migrar en esta etapa. Durante un
 
 - ¿Se confirman los valores propuestos de anticipación (mínimo 24 horas y máximo 30 días), horario (lunes a sábado, 07:00–21:00) y cancelación aprobada (hasta 2 horas antes)? No se propone máximo de duración; el plan no determina los otros valores.
 - Cuando un bloqueo de mantenimiento se cruza con reservas pendientes o aprobadas, ¿se debe rechazar el bloqueo hasta resolver esas reservas? Se propone ese comportamiento para impedir que una reserva vigente permanezca dentro de un período bloqueado.
-- ¿Las cuentas creadas por un administrador quedan activas de inmediato o requieren una activación posterior? La propuesta distingue activar y desactivar cuentas, pero no define el estado inicial.
-- Si se desactiva una cuenta con reservas futuras, ¿esas reservas permanecen vigentes o se cancelan administrativamente? La propuesta impide nuevas reservas y conserva el historial, pero no define el tratamiento de reservas ya creadas.
-- ¿Qué dominio o dominios identifican un correo institucional válido? La propuesta exige ese dato, pero el plan no identifica la política de dominios de la universidad.
 - Cuando una solicitud pendiente llega a su hora de inicio o de fin sin decisión, ¿se cancela, se rechaza o permanece pendiente? El plan define el bloqueo temporal, pero no el vencimiento de una solicitud sin resolver.
 - Cuando se modifica una reserva aprobada en un espacio que requiere aprobación, ¿la reserva original continúa ocupando su horario mientras se decide el cambio, o se libera al enviar la modificación? ¿Qué intervalo ocupa la modificación y qué ocurre con la reserva si se rechaza el cambio?
 - Cuando se desactiva un espacio con reservas futuras, ¿qué canal manual y qué responsable se usarán para notificar a los solicitantes? El plan excluye avisos automáticos por correo y no define un canal alternativo.

@@ -28,6 +28,18 @@ def _migration_files() -> list[tuple[int, Path]]:
     return migrations
 
 
+def _execute_sql_statements(connection: sqlite3.Connection, sql: str) -> None:
+    pending = ""
+    for line in sql.splitlines():
+        pending += line + "\n"
+        if sqlite3.complete_statement(pending):
+            if pending.strip():
+                connection.execute(pending)
+            pending = ""
+    if pending.strip():
+        raise ValueError("La migración termina con una sentencia SQL incompleta")
+
+
 def apply_migrations(connection: sqlite3.Connection) -> int:
     """Apply each unapplied SQL migration in its own SQLite transaction."""
     current_version = connection.execute("PRAGMA user_version").fetchone()[0]
@@ -42,20 +54,30 @@ def apply_migrations(connection: sqlite3.Connection) -> int:
     for version, path in migrations:
         if version <= current_version:
             continue
+        if connection.in_transaction:
+            raise RuntimeError("Las migraciones requieren una conexión sin transacción activa")
 
         sql = path.read_text(encoding="utf-8")
-        script = (
-            "BEGIN IMMEDIATE;\n"
-            f"{sql}\n"
-            f"PRAGMA user_version = {version};\n"
-            "COMMIT;"
-        )
+        foreign_keys_enabled = connection.execute("PRAGMA foreign_keys").fetchone()[0]
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute("BEGIN IMMEDIATE")
         try:
-            connection.executescript(script)
-        except sqlite3.Error:
+            _execute_sql_statements(connection, sql)
+            violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+            if violations:
+                raise sqlite3.IntegrityError(
+                    f"La migración {path.name} dejaría relaciones inválidas: {violations}"
+                )
+            connection.execute(f"PRAGMA user_version = {version}")
+            connection.commit()
+        except Exception:
             if connection.in_transaction:
                 connection.rollback()
             raise
+        finally:
+            connection.execute(
+                f"PRAGMA foreign_keys = {1 if foreign_keys_enabled else 0}"
+            )
         current_version = version
 
     return current_version
