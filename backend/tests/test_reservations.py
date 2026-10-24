@@ -1108,13 +1108,13 @@ def test_pending_change_decision_requires_assigned_approver_who_is_not_requester
     reservation_api,
 ):
     api = reservation_api
-    original_start, original_end, _ = _future_interval(days=28)
+    original_start, original_end, _ = _future_interval(days=21)
     reservation_id = _insert_reservation(
         user_id=api["requester"]["id"], space_id=api["space"]["id"],
         status="approved", starts_at=original_start.astimezone(timezone.utc),
         ends_at=original_end.astimezone(timezone.utc),
     )
-    proposed_start, proposed_end, _ = _future_interval(days=29)
+    proposed_start, proposed_end, _ = _future_interval(days=22)
     change = api["client"].put(
         f"/reservations/{reservation_id}", headers=api["requester_headers"],
         json={"starts_at": proposed_start.isoformat(), "ends_at": proposed_end.isoformat()},

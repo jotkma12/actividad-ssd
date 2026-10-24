@@ -102,10 +102,7 @@ function roleSummaries(role) {
     ];
   }
   if (role === 'approver') {
-    return [
-      { label: 'Solicitudes pendientes', path: '/approvals/pending' },
-      { label: 'Cambios por revisar', path: '/approvals/pending-changes' },
-    ];
+    return [{ label: 'Solicitudes y cambios pendientes', path: '/approvals' }];
   }
   return [{ label: 'Mis reservas', path: '/reservations' }];
 }

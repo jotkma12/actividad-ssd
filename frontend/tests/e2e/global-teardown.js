@@ -2,6 +2,9 @@ import { rmSync } from 'node:fs';
 
 export default async function globalTeardown() {
   if (process.env.E2E_DATA_DIRECTORY) {
-    rmSync(process.env.E2E_DATA_DIRECTORY, { recursive: true, force: true });
+    const testDataDirectory = process.env.E2E_DATA_DIRECTORY;
+    process.once('exit', () => {
+      rmSync(testDataDirectory, { recursive: true, force: true });
+    });
   }
 }

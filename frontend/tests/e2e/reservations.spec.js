@@ -33,6 +33,7 @@ test('rechaza el exceso del límite acumulado y conserva las reservas confirmada
   await signInRequester(page);
   await page.getByRole('button', { name: 'Mis reservas' }).click();
   await expect(page.getByRole('heading', { name: 'Mis reservas' })).toBeVisible();
+  await expect(page.locator('.account-count')).toBeVisible();
   const initialReservations = await page.locator('.reservation-card').count();
   await page.getByRole('button', { name: '← Volver al panel' }).click();
   await searchAvailable(page, '14:00', 210, 'Sala límite E2E');
